@@ -8,6 +8,11 @@ import {
 import { useEffect, useState } from "react";
 import { getToken } from "./api";
 
+/** Chrome Web Store listing, once published (VITE_EXTENSION_URL in apps/web/.env). */
+export const EXTENSION_STORE_URL = import.meta.env.VITE_EXTENSION_URL || null;
+/** The production build, zipped and served next to the app by the deploy script. */
+export const EXTENSION_ZIP_URL = "/jewel-finder-extension.zip";
+
 function post(msg: WebToExtension) {
   window.postMessage(msg, window.location.origin);
 }

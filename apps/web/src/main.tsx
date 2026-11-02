@@ -9,6 +9,7 @@ import { Login, Signup } from "./pages/Auth";
 import { Home } from "./pages/Home";
 import { ItemDetail } from "./pages/ItemDetail";
 import { EditItem, NewItem } from "./pages/ItemEditor";
+import { Extension } from "./pages/Extension";
 import { Settings } from "./pages/Settings";
 import "./styles.css";
 
@@ -29,6 +30,7 @@ const router = createRouter([
       { path: "/items/:id", element: <ItemDetail /> },
       { path: "/items/:id/edit", element: <EditItem /> },
       { path: "/settings", element: <Settings /> },
+      { path: "/extension", element: <Extension /> },
     ],
   },
     ],

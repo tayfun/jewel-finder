@@ -1,5 +1,6 @@
 import type { Account, Settings as SettingsType } from "@jf/shared";
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import { api } from "../api";
 import { useAccount, useAuth } from "../auth";
 import { ThemePicker } from "../components/ThemeToggle";
@@ -75,8 +76,7 @@ export function Settings() {
               </p>
             ) : (
               <p>
-                Not detected. Build it with <code>pnpm build:ext</code> and load <code>apps/extension/dist</code> as an
-                unpacked extension from <code>chrome://extensions</code>.
+                Not detected in this browser. <Link to="/extension">Install the extension</Link>
               </p>
             )}
           </section>

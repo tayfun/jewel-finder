@@ -1,4 +1,4 @@
-// Production deploy: web app → Worker, with source maps uploaded to Sentry when configured.
+// Production deploy: web app (+ extension zip) → Worker, with source maps uploaded to Sentry when configured.
 //
 //   pnpm run deploy
 //   pnpm run deploy -- --dry-run   # build and inject only; nothing is uploaded or deployed
@@ -7,7 +7,7 @@
 // (see `.env.sentry.example`). Without SENTRY_AUTH_TOKEN the deploy still runs,
 // just without source maps.
 import { execSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
@@ -27,6 +27,13 @@ if (!env.VITE_SENTRY_DSN) console.warn("⚠ VITE_SENTRY_DSN not set: the web app
 
 // 1. Web app. Its Vite config uploads (then deletes) source maps when SENTRY_AUTH_TOKEN is set.
 run("pnpm --filter @jf/web build");
+
+// 1b. Extension: the zipped production build, offered on /extension for manual installs
+//     until it's in the Chrome Web Store (and the same file you upload there).
+run("pnpm --filter @jf/extension release");
+const ext = resolve(root, "apps/extension");
+const { version } = JSON.parse(readFileSync(resolve(ext, "dist-prod/manifest.json"), "utf8"));
+copyFileSync(resolve(ext, `release/jewel-finder-${version}.zip`), resolve(root, "apps/web/dist/jewel-finder-extension.zip"));
 
 // 2. Worker: bundle once, stamp the bundle and its map with matching debug IDs, upload the map,
 //    then deploy that exact bundle so the IDs Sentry knows are the ones running.

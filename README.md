@@ -81,3 +81,25 @@ pnpm run deploy -- --dry-run            # check: builds everything, uploads/depl
 pnpm run deploy                         # web build → Worker bundle → source maps → wrangler deploy
 pnpm build:ext:prod  # or API_URL=https://… pnpm build:ext for another deployment
 ```
+
+## Publishing the extension
+
+`pnpm run deploy` also builds `apps/extension/release/jewel-finder-<version>.zip` (or run `pnpm release:ext`
+on its own) and serves it at `/jewel-finder-extension.zip`. Until the extension is in the Chrome Web Store,
+the web app's `/extension` page offers that zip with "Load unpacked" steps.
+
+To publish it:
+
+1. Register at the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
+   (one-off US$5 fee) and verify a contact email.
+2. **New item** → upload the zip. Fill in the listing: description, category (Productivity), a 128×128 icon
+   (`apps/extension/icons/128.png`), at least one 1280×800 screenshot, and a privacy policy URL.
+3. On the **Privacy** tab, explain each permission: `storage` (sign-in token), `sidePanel` (the UI),
+   `tabs` (opening Vinted/eBay sell pages), host access to the Worker (your inventory) and to Vinted/eBay
+   (filling in their listing forms). Declare that it handles authentication info and website content, and
+   that nothing is sold or used for anything else.
+4. Submit for review (usually a few days). Choose **Unlisted** if only people with the link should find it.
+5. Once approved, set `VITE_EXTENSION_URL` in `apps/web/.env` to the listing URL and redeploy: the
+   "Install" links then go to the store.
+
+For updates, bump `version` in `apps/extension/package.json`, run `pnpm release:ext` and upload the new zip.

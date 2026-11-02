@@ -8,6 +8,7 @@
     "build": "pnpm --filter @jf/web build && pnpm --filter @jf/extension build",
     "build:ext": "pnpm --filter @jf/extension build",
     "build:ext:prod": "pnpm --filter @jf/extension build:prod",
+    "release:ext": "pnpm --filter @jf/extension release",
     "deploy": "node scripts/deploy.mjs",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"

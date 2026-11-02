@@ -360,7 +360,8 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
       <h2>Marketplaces</h2>
       {extension === false && (
         <p className="notice small">
-          Install the Jewel Finder Chrome extension to fill in Vinted and eBay listings automatically.
+          <Link to="/extension">Install the Jewel Finder Chrome extension</Link> to fill in Vinted and eBay listings
+          automatically.
         </p>
       )}
       <ul className="listings">

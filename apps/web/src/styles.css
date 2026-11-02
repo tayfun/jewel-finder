@@ -439,3 +439,6 @@ label.checkbox input { width: 1rem; }
 .error-screen { min-height: 70vh; display: grid; place-items: center; padding: 1.5rem; }
 .error-screen .card { max-width: 440px; text-align: center; padding: 2rem; }
 .error-screen .actions { justify-content: center; margin-top: 1.2rem; }
+
+.install-steps { padding-left: 1.25rem; display: grid; gap: 0.6rem; margin: 0.75rem 0 1rem; }
+.install-steps li::marker { color: var(--muted); }
