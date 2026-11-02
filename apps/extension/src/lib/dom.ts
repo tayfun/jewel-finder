@@ -130,7 +130,7 @@ export function findOption(text: string, root: ParentNode = document): HTMLEleme
   );
 }
 
-function click(el: HTMLElement) {
+export function click(el: HTMLElement) {
   for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup"]) {
     el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }));
   }
@@ -155,4 +155,43 @@ export async function pickOption(trigger: HTMLElement, text: string, timeoutMs =
   click(option);
   await sleep(150);
   return true;
+}
+
+const CHOICE_SELECTORS = "input[type=radio], [role=radio], [role=option], label, button, li, [data-testid]";
+
+/** Text of all text nodes joined with spaces, so "<b>Small</b><span>Up to 2 kg</span>" reads "small up to 2 kg". */
+function spacedText(el: Element): string {
+  const parts: string[] = [];
+  const walker = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) parts.push(n.nodeValue ?? "");
+  return normalize(parts.join(" "));
+}
+
+/** What a choice says; radio inputs are read from their label. */
+function choiceText(el: HTMLElement): string {
+  if (el instanceof HTMLInputElement) {
+    const label = el.labels?.[0] ?? el.closest("label");
+    return label ? spacedText(label) : normalize(el.getAttribute("aria-label") ?? el.value);
+  }
+  return spacedText(el);
+}
+
+/**
+ * The most specific choice (radio, tile, option, button) under `root` whose text matches `match`,
+ * skipping anything inside `exclude`. Shortest text wins, so a tile beats the list around it.
+ */
+export function findChoice(match: RegExp, root: ParentNode = document, exclude?: Element | null): HTMLElement | null {
+  let best: HTMLElement | null = null;
+  let bestLength = Infinity;
+  for (const el of root.querySelectorAll<HTMLElement>(CHOICE_SELECTORS)) {
+    if (exclude?.contains(el)) continue;
+    const text = choiceText(el);
+    if (match.test(text) && text.length < bestLength) {
+      best = el;
+      bestLength = text.length;
+    }
+  }
+  // Click the radio itself rather than its label: controlled forms listen on the input.
+  if (best instanceof HTMLLabelElement && best.control) return best.control as HTMLElement;
+  return best;
 }

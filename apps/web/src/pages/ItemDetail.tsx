@@ -2,6 +2,7 @@ import {
   CONDITION_LABELS,
   MARKETPLACES,
   MARKETPLACE_LABELS,
+  PACKAGE_SIZE_LABELS,
   formatMoney,
   parseListingUrl,
   type ItemWithListings,
@@ -66,6 +67,12 @@ export function ItemDetail() {
       ["Size", item.size],
       ["Colour", item.colour],
       ["Condition", item.condition ? CONDITION_LABELS[item.condition] : ""],
+      [
+        "Postage",
+        [item.packageSize && PACKAGE_SIZE_LABELS[item.packageSize], item.weightGrams && `${item.weightGrams} g`]
+          .filter(Boolean)
+          .join(" · "),
+      ],
       ["Quantity", String(item.quantity)],
       ["Tags", item.tags.join(", ")],
     ] as [string, string][]

@@ -5,6 +5,8 @@ import {
   BookDetails,
   CONDITIONS,
   Condition,
+  PACKAGE_SIZES,
+  PackageSize,
   RARITIES,
   isValidIsbn,
   type AutofillSuggestion,
@@ -30,6 +32,10 @@ Identify the book and edition as precisely as the photos allow:
 - Only state "First edition" / "First printing" when the photos show evidence for it; explain the evidence in rarityNotes.
 - Rarity is about how hard this specific edition and copy is to find (first editions, signed copies, limited runs, early printings of famous titles are scarcer).
 - Grade condition from what you can see: dust jacket, spine, corners, foxing, tears, writing, stickers.
+
+Estimate postage for UK sellers, for the item once wrapped and packed:
+- weightGrams: the packed weight. Judge the item's size and page count from the photos; a typical paperback novel is 200-350 g, a hardback 500-900 g, a large illustrated book 1-2 kg. Add about 50 g for packaging.
+- packageSize: "large_letter" only if it packs to at most 35 x 25 x 2.5 cm and 1 kg (thin paperbacks); "small" up to 45 x 35 x 16 cm and 2 kg (most books); "medium" up to 61 x 46 x 46 cm; "large" for anything bigger.
 
 Write the listing:
 - title: at most 80 characters, keyword-rich for marketplace search, e.g. "Harry Potter and the Philosopher's Stone J.K. Rowling 1st Edition 1997 Hardback".
@@ -79,10 +85,12 @@ export const RESPONSE_SCHEMA = {
         "rarityNotes",
       ],
     },
+    packageSize: nullable({ type: "string", enum: [...PACKAGE_SIZES], description: "Postage size once packed." }),
+    weightGrams: nullable({ type: "integer", description: "Estimated packed weight in grams, including packaging." }),
     confidence: { type: "number", minimum: 0, maximum: 1, description: "Confidence in the identification, 0-1." },
     notes: str("What could not be verified from the photos, if anything."),
   },
-  required: ["title", "description", "condition", "category", "tags", "book", "confidence", "notes"],
+  required: ["title", "description", "condition", "category", "tags", "book", "packageSize", "weightGrams", "confidence", "notes"],
 } as const;
 
 /** Lenient parse of the model's JSON: schema-shaped, but never trust it blindly. */
@@ -93,15 +101,25 @@ const ModelOutput = z.object({
   category: z.string().catch(""),
   tags: z.array(z.string()).catch([]),
   book: z.record(z.string(), z.unknown()).catch({}),
+  packageSize: PackageSize.nullable().catch(null),
+  weightGrams: z.number().int().min(1).max(100_000).nullable().catch(null),
   confidence: z.number().catch(0),
   notes: z.string().catch(""),
 });
 
 export class AutofillError extends Error {}
 
+/** HTTP status of a Gemini SDK error; a client-side timeout (aborted fetch, no status) counts as 504. */
+function geminiStatus(e: unknown): number | undefined {
+  const err = e as { status?: number; name?: string; message?: string };
+  if (err.status) return err.status;
+  if (err.name === "AbortError" || err.name === "TimeoutError" || /aborted|timed? ?out/i.test(err.message ?? "")) return 504;
+  return undefined;
+}
+
 /** Turns a Gemini SDK error into something a seller can act on. */
 export function describeGeminiError(e: unknown): string {
-  const status = (e as { status?: number }).status;
+  const status = geminiStatus(e);
   if (status === 429 || status === 503) return "Gemini is busy right now. Please try again in a minute.";
   if (status === 504) return "Gemini took too long on these photos. Please try again, or remove a few photos.";
   if (status === 400 || status === 403) return `Gemini rejected the request (${status}). Check GEMINI_API_KEY and GEMINI_MODEL.`;
@@ -141,6 +159,8 @@ export function normaliseSuggestion(raw: unknown): AutofillSuggestion {
     category: out.data.category.trim().slice(0, 120),
     tags: [...new Set(out.data.tags.map((t) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 10).map((t) => t.slice(0, 40)),
     book,
+    packageSize: out.data.packageSize,
+    weightGrams: out.data.weightGrams,
     confidence: Math.min(1, Math.max(0, out.data.confidence)),
     notes: notes.filter(Boolean).join(" "),
   };
@@ -209,7 +229,7 @@ export async function suggestListing(
       text = res.text;
       break;
     } catch (e) {
-      const status = (e as { status?: number }).status;
+      const status = geminiStatus(e);
       // Workers logs keep only the stack of an Error argument, so log the status and body explicitly.
       console.error("Gemini request failed", { model, status, message: (e as Error).message });
       if (last || !(status === 429 || status === 503 || status === 504)) throw new AutofillError(describeGeminiError(e));

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { isValidIsbn, parseListingUrl, sellUrl } from "./marketplaces";
+import { ebayPackageSize, isValidIsbn, parseListingUrl, sellUrl, vintedPackageSize } from "./marketplaces";
 import { formatMoney, parseMoney, toDecimal } from "./money";
-import { BookDetails, ItemInput, Settings } from "./schemas";
+import { BookDetails, ItemInput, Settings, type PackageSize } from "./schemas";
 
 const settings = Settings.parse({});
 
@@ -72,5 +72,25 @@ describe("books", () => {
   it("normalises ISBNs and fills defaults", () => {
     expect(BookDetails.parse({ isbn: "978-0-7475-3269-9" })).toMatchObject({ isbn: "9780747532699", author: "", signed: false });
     expect(BookDetails.safeParse({ isbn: "12-34" }).success).toBe(false);
+  });
+});
+
+describe("package sizes", () => {
+  const item = (packageSize: PackageSize | null, weightGrams: number | null) => ({ packageSize, weightGrams });
+
+  it("maps to eBay, moving up a band when too heavy", () => {
+    expect(ebayPackageSize(item(null, 500))).toBeNull();
+    expect(ebayPackageSize(item("large_letter", 300))).toBe("large_letter");
+    expect(ebayPackageSize(item("large_letter", 1200))).toBe("small");
+    expect(ebayPackageSize(item("small", 2600))).toBe("medium");
+    expect(ebayPackageSize(item("small", null))).toBe("small");
+    expect(ebayPackageSize(item("medium", 25_000))).toBe("large");
+  });
+
+  it("maps to Vinted's three sizes", () => {
+    expect(vintedPackageSize(item("large_letter", 300))).toBe("small");
+    expect(vintedPackageSize(item("small", 2600))).toBe("medium");
+    expect(vintedPackageSize(item("medium", 6000))).toBe("large");
+    expect(vintedPackageSize(item("large", 1000))).toBe("large");
   });
 });

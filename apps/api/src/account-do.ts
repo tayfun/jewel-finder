@@ -63,6 +63,9 @@ const MIGRATIONS = [
    CREATE TABLE counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL);`,
   // v2: bibliographic details (JSON BookDetails) for book items.
   `ALTER TABLE items ADD COLUMN book TEXT;`,
+  // v3: postage size and packed weight.
+  `ALTER TABLE items ADD COLUMN package_size TEXT;
+   ALTER TABLE items ADD COLUMN weight_grams INTEGER;`,
 ];
 
 type Row = Record<string, SqlStorageValue>;
@@ -86,6 +89,8 @@ function toItem(r: Row): Item {
     tags: JSON.parse(r.tags as string),
     notes: r.notes as string,
     book: r.book ? JSON.parse(r.book as string) : null,
+    packageSize: (r.package_size as Item["packageSize"]) ?? null,
+    weightGrams: (r.weight_grams as number | null) ?? null,
     createdAt: r.created_at as number,
     updatedAt: r.updated_at as number,
   };
@@ -235,8 +240,8 @@ class AccountDOBase extends DurableObject<Env> {
     const now = Date.now();
     this.db().exec(
       `INSERT INTO items (id, sku, title, description, brand, category, size, colour, condition, price, cost,
-         quantity, status, images, tags, notes, book, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         quantity, status, images, tags, notes, book, package_size, weight_grams, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       input.sku || this.nextSku(),
       input.title,
@@ -254,6 +259,8 @@ class AccountDOBase extends DurableObject<Env> {
       JSON.stringify(input.tags),
       input.notes,
       input.book ? JSON.stringify(input.book) : null,
+      input.packageSize,
+      input.weightGrams,
       now,
       now,
     );
@@ -271,7 +278,7 @@ class AccountDOBase extends DurableObject<Env> {
     this.db().exec(
       `UPDATE items SET sku = ?, title = ?, description = ?, brand = ?, category = ?, size = ?, colour = ?,
          condition = ?, price = ?, cost = ?, quantity = ?, status = ?, images = ?, tags = ?, notes = ?,
-         book = ?, updated_at = ?
+         book = ?, package_size = ?, weight_grams = ?, updated_at = ?
        WHERE id = ?`,
       next.sku || current.sku,
       next.title,
@@ -289,6 +296,8 @@ class AccountDOBase extends DurableObject<Env> {
       JSON.stringify(next.tags),
       next.notes,
       next.book ? JSON.stringify(next.book) : null,
+      next.packageSize,
+      next.weightGrams,
       Date.now(),
       id,
     );

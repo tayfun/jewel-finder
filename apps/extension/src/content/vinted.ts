@@ -1,6 +1,13 @@
-import { CONDITION_LABELS, parseListingUrl, toDecimal } from "@jf/shared";
+import {
+  CONDITION_LABELS,
+  VINTED_PACKAGE_LABELS,
+  parseListingUrl,
+  toDecimal,
+  vintedPackageSize,
+  type VintedPackageSize,
+} from "@jf/shared";
 import type { FillReport } from "../messages";
-import { attachFiles, findField, pickOption, setValue, sleep, waitFor, type FieldSpec } from "../lib/dom";
+import { attachFiles, click, findChoice, findField, normalize, pickOption, setValue, sleep, waitFor, type FieldSpec } from "../lib/dom";
 import { run, type Adapter } from "../lib/runner";
 
 // Vinted's upload form (/items/new). Several strategies per field because the DOM changes without notice.
@@ -21,6 +28,37 @@ export const FIELDS = {
     labels: [/^condition$/],
   },
 } satisfies Record<string, FieldSpec>;
+
+const RADIOS = 'input[type=radio], [role=radio]';
+
+/** Nearest ancestor of `el` (up to a few levels) that holds at least two size choices. */
+function choiceBox(el: HTMLElement): HTMLElement | null {
+  let box: HTMLElement | null = el.parentElement;
+  for (let i = 0; box && i < 6; i++, box = box.parentElement) {
+    if (box.querySelectorAll(RADIOS).length >= 2) return box;
+  }
+  return null;
+}
+
+/** The "Parcel size" section, found by test id or by its heading. */
+function packageSection(): HTMLElement | null {
+  const byTestId = document.querySelector<HTMLElement>('[data-testid*="package-size"], [data-testid*="parcel-size"]');
+  if (byTestId) return choiceBox(byTestId);
+  for (const el of document.querySelectorAll<HTMLElement>("h1, h2, h3, h4, legend, label, span, div")) {
+    if (el.children.length > 2 || !/^(parcel|package) size$/.test(normalize(el.textContent))) continue;
+    const box = choiceBox(el);
+    if (box) return box;
+  }
+  return null;
+}
+
+function selectPackageSize(size: VintedPackageSize): boolean {
+  const section = packageSection();
+  const choice = section && findChoice(new RegExp(`^${size}\\b`), section);
+  if (!choice) return false;
+  click(choice);
+  return true;
+}
 
 export const vinted: Adapter = {
   marketplace: "vinted",
@@ -78,7 +116,16 @@ export const vinted: Adapter = {
       report.manual.push({ field: "Price", value: toDecimal(item.price) });
     }
 
-    report.manual.push({ field: "Parcel size", value: "" });
+    const packageSize = vintedPackageSize(item);
+    if (packageSize && (await waitFor(() => (selectPackageSize(packageSize) ? true : null), 1500))) {
+      report.filled.push("Parcel size");
+    } else if (packageSize) {
+      // The sizes only appear once a category is picked, which the seller does by hand: keep watching.
+      void waitFor(() => (selectPackageSize(packageSize) ? true : null), 10 * 60_000, 1000);
+      report.manual.push({ field: "Parcel size", value: `${VINTED_PACKAGE_LABELS[packageSize]} (picked for you once the sizes appear)` });
+    } else {
+      report.manual.push({ field: "Parcel size", value: "" });
+    }
     return report;
   },
 };

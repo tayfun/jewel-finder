@@ -1,4 +1,4 @@
-import type { BookFormat, Condition, Marketplace, Rarity, Settings } from "./schemas";
+import type { BookFormat, Condition, Marketplace, PackageSize, Rarity, Settings } from "./schemas";
 
 export const MARKETPLACE_LABELS: Record<Marketplace, string> = {
   vinted: "Vinted",
@@ -29,6 +29,45 @@ export const RARITY_LABELS: Record<Rarity, string> = {
   rare: "Rare",
   very_rare: "Very rare",
 };
+
+export const PACKAGE_SIZE_LABELS: Record<PackageSize, string> = {
+  large_letter: "Large letter",
+  small: "Small parcel",
+  medium: "Medium parcel",
+  large: "Large parcel",
+};
+
+export const PACKAGE_SIZE_HINTS: Record<PackageSize, string> = {
+  large_letter: "Up to 35 × 25 × 2.5 cm, 1 kg",
+  small: "Up to 45 × 35 × 16 cm, 2 kg",
+  medium: "Up to 61 × 46 × 46 cm",
+  large: "Anything bigger",
+};
+
+const ORDER: PackageSize[] = ["large_letter", "small", "medium", "large"];
+
+/** Moves up a band while the weight is over its limit. */
+function bump<T extends PackageSize>(size: T, weightGrams: number | null, maxGrams: Partial<Record<T, number>>, order: T[]): T {
+  let i = order.indexOf(size);
+  while (i < order.length - 1 && weightGrams != null && weightGrams > (maxGrams[order[i]!] ?? Infinity)) i++;
+  return order[i]!;
+}
+
+/** eBay UK's package size for an item: same bands as ours, bumped by weight. */
+export function ebayPackageSize(item: { packageSize: PackageSize | null; weightGrams: number | null }): PackageSize | null {
+  if (!item.packageSize) return null;
+  return bump(item.packageSize, item.weightGrams, { large_letter: 1000, small: 2000, medium: 20_000 }, ORDER);
+}
+
+export type VintedPackageSize = "small" | "medium" | "large";
+export const VINTED_PACKAGE_LABELS: Record<VintedPackageSize, string> = { small: "Small", medium: "Medium", large: "Large" };
+
+/** Vinted's parcel size: Small (≤2 kg), Medium (≤5 kg), Large (≤10 kg). Large letters go as Small. */
+export function vintedPackageSize(item: { packageSize: PackageSize | null; weightGrams: number | null }): VintedPackageSize | null {
+  if (!item.packageSize) return null;
+  const size = item.packageSize === "large_letter" ? "small" : item.packageSize;
+  return bump<VintedPackageSize>(size, item.weightGrams, { small: 2000, medium: 5000 }, ["small", "medium", "large"]);
+}
 
 /** Checks an ISBN-10/13 check digit (input already stripped of spaces and hyphens). */
 export function isValidIsbn(isbn: string): boolean {

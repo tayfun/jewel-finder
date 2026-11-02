@@ -52,6 +52,9 @@ own "sell an item" form (no marketplace APIs — Vinted has none, and we don't w
   - `status`: `draft | in_stock | sold | archived`
   - `book` (json, nullable, migration v2): `author, isbn, publisher, yearPublished, edition, printing,
     format, language, signed, dustJacket, rarity (common…very_rare), rarityNotes`
+  - `package_size` (`large_letter | small | medium | large`) and `weight_grams` (packed), migration v3.
+    Each marketplace's own size is derived at fill time, bumped up a band when the weight is over its
+    limit (eBay UK: large letter 1 kg, small 2 kg, medium 20 kg; Vinted: small 2 kg, medium 5 kg)
 - **listings**: `id, item_id, marketplace (vinted|ebay), status (pending|listed|sold|ended|failed),
   external_id, url, price, error, created_at, updated_at` — unique on `(item_id, marketplace)`
 

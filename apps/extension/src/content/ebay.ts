@@ -1,6 +1,24 @@
-import { EBAY_CONDITION_LABELS, parseListingUrl, toDecimal } from "@jf/shared";
+import {
+  EBAY_CONDITION_LABELS,
+  PACKAGE_SIZE_LABELS,
+  ebayPackageSize,
+  parseListingUrl,
+  toDecimal,
+  type PackageSize,
+} from "@jf/shared";
 import type { FillReport } from "../messages";
-import { attachFiles, findField, normalize, pickOption, setValue, sleep, waitFor, type FieldSpec } from "../lib/dom";
+import {
+  attachFiles,
+  click,
+  findChoice,
+  findField,
+  normalize,
+  pickOption,
+  setValue,
+  sleep,
+  waitFor,
+  type FieldSpec,
+} from "../lib/dom";
 import { run, type Adapter } from "../lib/runner";
 
 // eBay's listing form (/lstng?...). The step before it (/sl/prelist) picks the category and condition.
@@ -90,6 +108,42 @@ async function fillDescription(text: string): Promise<boolean> {
   return false;
 }
 
+/** How eBay UK names each size in its package picker ("Small parcel up to 2 kg", …). */
+const EBAY_PACKAGE_MATCH: Record<PackageSize, RegExp> = {
+  large_letter: /^large letter\b/,
+  small: /^small (parcel|package)\b/,
+  medium: /^medium (parcel|package)\b/,
+  large: /^large (parcel|package)\b/,
+};
+
+/**
+ * Delivery → "package size" is a summary button showing the current size. It opens a picker;
+ * choose the matching size there and confirm if the picker asks for it.
+ */
+async function fillPackageSize(size: PackageSize): Promise<boolean> {
+  const want = EBAY_PACKAGE_MATCH[size];
+  const summary = document.querySelector<HTMLElement>(".se-package-details-summary");
+  const current = () => normalize(document.querySelector(".se-package-details-summary__label")?.textContent);
+  const opener = summary?.querySelector<HTMLElement>("button");
+  if (!summary || !opener) return false;
+  if (want.test(current())) return true;
+
+  click(opener);
+  const choice = await waitFor(() => findChoice(want, document, summary), 4000);
+  if (!choice) {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    return false;
+  }
+  click(choice);
+  await sleep(300);
+  if (!want.test(current())) {
+    const dialog = choice.closest<HTMLElement>('[role=dialog], dialog, [class*="dialog"], [class*="drawer"]') ?? document;
+    const confirm = findChoice(/^(save|done|apply|confirm|update|continue)$/, dialog, summary);
+    if (confirm) click(confirm);
+  }
+  return Boolean(await waitFor(() => (want.test(current()) ? true : null), 3000));
+}
+
 /** Item specifics are comboboxes: type the value, then take the matching suggestion if one appears. */
 async function fillSpecific(spec: FieldSpec, value: string): Promise<boolean> {
   const el = findField(spec);
@@ -163,6 +217,12 @@ export const ebay: Adapter = {
       report.filled.push("Price");
     } else {
       report.manual.push({ field: "Price", value: toDecimal(item.price) });
+    }
+
+    const packageSize = ebayPackageSize(item);
+    if (packageSize) {
+      if (await fillPackageSize(packageSize)) report.filled.push("Package size");
+      else report.manual.push({ field: "Package size", value: PACKAGE_SIZE_LABELS[packageSize] });
     }
 
     report.manual.push({ field: "Postage", value: "" });

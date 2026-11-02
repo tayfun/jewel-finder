@@ -29,6 +29,8 @@ const modelOutput = {
     rarity: "very_rare",
     rarityNotes: "Number line 10 9 8 7 6 5 4 3 2 1 visible on the copyright page.",
   },
+  packageSize: "small",
+  weightGrams: 650,
   confidence: 0.86,
   notes: "",
 };
@@ -89,6 +91,8 @@ describe("POST /api/items/:id/autofill", () => {
       condition: "good",
       tags: ["harry potter", "first edition"],
       confidence: 0.86,
+      packageSize: "small",
+      weightGrams: 650,
       book: { author: "J.K. Rowling", isbn: "0747532699", yearPublished: 1997, rarity: "very_rare", format: "hardback" },
     });
 
@@ -121,7 +125,7 @@ describe("POST /api/items/:id/autofill", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const req = new Request(input, init);
       if (!req.url.includes("generativelanguage.googleapis.com")) return realFetch(input, init);
-      const model = req.url.match(/models\/([^:]+):/)![1];
+      const model = req.url.match(/models\/([^:]+):/)?.[1] ?? "";
       calls.push({ model, timeout: req.headers.get("x-server-timeout") });
       if (model === "gemini-3.8-flash") {
         return Response.json({ error: { code: 504, message: "Deadline expired", status: "DEADLINE_EXCEEDED" } }, { status: 504 });
@@ -138,6 +142,19 @@ describe("POST /api/items/:id/autofill", () => {
       { model: "gemini-3.5-flash", timeout: "60" },
     ]);
   });
+
+  it("also falls back when the request is aborted by our own timeout", async () => {
+    const { token, item } = await itemWithPhoto();
+    const realFetch = globalThis.fetch;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const req = new Request(input, init);
+      if (!req.url.includes("generativelanguage.googleapis.com")) return realFetch(input, init);
+      if (req.url.includes("gemini-3.8-flash")) throw new DOMException("The operation was aborted", "AbortError");
+      return Response.json({ candidates: [{ content: { role: "model", parts: [{ text: JSON.stringify(modelOutput) }] } }] });
+    });
+    const res = await call<{ suggestion: AutofillSuggestion }>(`/api/items/${item.id}/autofill`, { token, json: {} });
+    expect(res.status).toBe(200);
+  });
 });
 
 describe("describeGeminiError", () => {
@@ -145,6 +162,7 @@ describe("describeGeminiError", () => {
     expect(describeGeminiError(Object.assign(new Error("x"), { status: 503 }))).toMatch(/busy/);
     expect(describeGeminiError(Object.assign(new Error("x"), { status: 429 }))).toMatch(/busy/);
     expect(describeGeminiError(Object.assign(new Error("x"), { status: 504 }))).toMatch(/too long/);
+    expect(describeGeminiError(new Error("The operation was aborted"))).toMatch(/too long/);
     expect(describeGeminiError(new Error("network down"))).toBe("The AI request failed: network down");
   });
 });
@@ -157,11 +175,15 @@ describe("normaliseSuggestion", () => {
       condition: "mint",
       confidence: 3,
       book: { ...modelOutput.book, isbn: "9780747532698", yearPublished: 99999, format: "scroll" },
+      packageSize: "crate",
+      weightGrams: -5,
     });
     expect(s.title).toHaveLength(80);
     expect(s.condition).toBeNull();
     expect(s.confidence).toBe(1);
     expect(s.book).toMatchObject({ isbn: "", yearPublished: null, format: null, author: "J.K. Rowling" });
+    expect(s.packageSize).toBeNull();
+    expect(s.weightGrams).toBeNull();
     expect(s.notes).toMatch(/check digit/);
   });
 
@@ -181,6 +203,19 @@ describe("book details on items", () => {
     expect(patched.status).toBe(200);
     expect(patched.data.book).toMatchObject({ author: "Tolkien", isbn: "9780261103207", yearPublished: 1991, signed: false });
     const bad = await call(`/api/items/${item.id}`, { token, method: "PATCH", json: { book: { isbn: "abc" } } });
+    expect(bad.status).toBe(400);
+  });
+
+  it("saves package size and weight", async () => {
+    const { token, item } = await itemWithPhoto(false);
+    expect(item).toMatchObject({ packageSize: null, weightGrams: null });
+    const patched = await call<ItemWithListings>(`/api/items/${item.id}`, {
+      token,
+      method: "PATCH",
+      json: { packageSize: "small", weightGrams: 650 },
+    });
+    expect(patched.data).toMatchObject({ packageSize: "small", weightGrams: 650 });
+    const bad = await call(`/api/items/${item.id}`, { token, method: "PATCH", json: { packageSize: "crate" } });
     expect(bad.status).toBe(400);
   });
 });

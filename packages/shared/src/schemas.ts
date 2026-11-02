@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BOOK_FORMATS, CONDITIONS, ITEM_STATUSES, LISTING_STATUSES, MARKETPLACES, RARITIES } from "./constants";
+import { BOOK_FORMATS, CONDITIONS, ITEM_STATUSES, LISTING_STATUSES, MARKETPLACES, PACKAGE_SIZES, RARITIES } from "./constants";
 
 export const Marketplace = z.enum(MARKETPLACES);
 export type Marketplace = z.infer<typeof Marketplace>;
@@ -15,6 +15,9 @@ export type ListingStatus = z.infer<typeof ListingStatus>;
 
 /** Money is always integer minor units (pence/cents). */
 const Money = z.int().min(0).max(100_000_000);
+
+export const PackageSize = z.enum(PACKAGE_SIZES);
+export type PackageSize = z.infer<typeof PackageSize>;
 
 export const BookFormat = z.enum(BOOK_FORMATS);
 export type BookFormat = z.infer<typeof BookFormat>;
@@ -64,6 +67,9 @@ const itemFields = {
   tags: z.array(z.string().trim().min(1).max(40)).max(30),
   notes: z.string().max(2000),
   book: BookDetails.nullable(),
+  packageSize: PackageSize.nullable(),
+  /** Packed weight in grams, including packaging. */
+  weightGrams: z.int().min(1).max(100_000).nullable(),
 };
 
 export const ItemInput = z.object({
@@ -83,6 +89,8 @@ export const ItemInput = z.object({
   tags: itemFields.tags.default([]),
   notes: itemFields.notes.default(""),
   book: itemFields.book.default(null),
+  packageSize: itemFields.packageSize.default(null),
+  weightGrams: itemFields.weightGrams.default(null),
 });
 export type ItemInput = z.input<typeof ItemInput>;
 /** ItemInput after parsing (defaults applied). */
@@ -109,6 +117,8 @@ export interface Item {
   tags: string[];
   notes: string;
   book: BookDetails | null;
+  packageSize: PackageSize | null;
+  weightGrams: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -194,6 +204,9 @@ export interface AutofillSuggestion {
   category: string;
   tags: string[];
   book: BookDetails;
+  packageSize: PackageSize | null;
+  /** Estimated packed weight in grams. */
+  weightGrams: number | null;
   /** 0–1: how sure the model is that it identified the right book/edition. */
   confidence: number;
   /** Caveats from the model, e.g. "copyright page not shown; edition unverified". */

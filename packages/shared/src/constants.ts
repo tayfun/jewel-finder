@@ -14,3 +14,6 @@ export const BOOK_FORMATS = ["hardback", "paperback", "mass_market_paperback", "
 
 /** How hard a book is to find, as estimated by the AI or the seller. */
 export const RARITIES = ["common", "uncommon", "scarce", "rare", "very_rare"] as const;
+
+/** Postage size of the packed item. Mapped to each marketplace's own bands (with the weight) at fill time. */
+export const PACKAGE_SIZES = ["large_letter", "small", "medium", "large"] as const;

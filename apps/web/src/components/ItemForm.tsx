@@ -4,9 +4,13 @@ import {
   CONDITIONS,
   CONDITION_LABELS,
   ITEM_STATUSES,
+  PACKAGE_SIZES,
+  PACKAGE_SIZE_HINTS,
+  PACKAGE_SIZE_LABELS,
   RARITIES,
   RARITY_LABELS,
   type BookFormat,
+  type PackageSize,
   type Rarity,
   parseMoney,
   toDecimal,
@@ -37,6 +41,8 @@ interface FormState {
   notes: string;
   images: string[];
   book: BookForm;
+  packageSize: PackageSize | "";
+  weightGrams: string;
 }
 
 /** Book details as form strings. */
@@ -73,6 +79,8 @@ function toForm(item?: Partial<Item>): FormState {
     notes: item?.notes ?? "",
     images: item?.images ?? [],
     book: toBookForm(item?.book ?? EMPTY_BOOK),
+    packageSize: item?.packageSize ?? "",
+    weightGrams: item?.weightGrams ? String(item.weightGrams) : "",
   };
 }
 
@@ -95,6 +103,8 @@ function fromForm(f: FormState): ItemInput | string {
   if (!Number.isInteger(quantity) || quantity < 0) return "Quantity must be a whole number";
   const year = f.book.yearPublished.trim() ? Number(f.book.yearPublished) : null;
   if (year != null && !(Number.isInteger(year) && year >= 1400 && year <= 2100)) return "Year published must be a year, e.g. 1997";
+  const weight = f.weightGrams.trim() ? Number(f.weightGrams) : null;
+  if (weight != null && !(Number.isInteger(weight) && weight >= 1 && weight <= 100_000)) return "Weight must be in whole grams, e.g. 450";
   const isbn = f.book.isbn.replace(/[\s-]/g, "").toUpperCase();
   if (isbn && !/^(\d{9}[\dX]|\d{13})$/.test(isbn)) return "ISBN must be 10 or 13 digits";
   return {
@@ -124,6 +134,8 @@ function fromForm(f: FormState): ItemInput | string {
       dustJacket: f.book.dustJacket === "" ? null : f.book.dustJacket === "yes",
       rarity: f.book.rarity || null,
     }),
+    packageSize: f.packageSize || null,
+    weightGrams: weight,
   };
 }
 
@@ -208,6 +220,21 @@ export function ItemForm({
                 </option>
               ))}
             </select>
+          </label>
+          <label>
+            Package size
+            <select {...field("packageSize")}>
+              <option value="">—</option>
+              {PACKAGE_SIZES.map((p) => (
+                <option key={p} value={p}>
+                  {PACKAGE_SIZE_LABELS[p]} · {PACKAGE_SIZE_HINTS[p]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Packed weight (g)
+            <input inputMode="numeric" maxLength={6} placeholder="e.g. 450" {...field("weightGrams")} />
           </label>
           <label>
             Tags

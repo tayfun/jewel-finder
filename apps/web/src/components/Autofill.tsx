@@ -1,5 +1,6 @@
 import {
   CONDITION_LABELS,
+  PACKAGE_SIZE_LABELS,
   type AutofillSuggestion,
   type BookDetails,
   type ItemWithListings,
@@ -8,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { BOOK_FIELDS, EMPTY_BOOK, bookOrNull } from "../book";
 
-type ItemKey = "title" | "description" | "condition" | "category" | "tags";
+type ItemKey = "title" | "description" | "condition" | "category" | "tags" | "packageSize" | "weightGrams";
 
 interface Row {
   id: string;
@@ -33,6 +34,20 @@ function buildRows(item: ItemWithListings, s: AutofillSuggestion): Row[] {
     },
     { key: "category", label: "Category", current: item.category, suggested: s.category, value: s.category },
     { key: "tags", label: "Tags", current: item.tags.join(", "), suggested: mergedTags.join(", "), value: mergedTags },
+    {
+      key: "packageSize",
+      label: "Package size",
+      current: item.packageSize ? PACKAGE_SIZE_LABELS[item.packageSize] : "",
+      suggested: s.packageSize ? PACKAGE_SIZE_LABELS[s.packageSize] : "",
+      value: s.packageSize,
+    },
+    {
+      key: "weightGrams",
+      label: "Packed weight",
+      current: item.weightGrams ? `${item.weightGrams} g` : "",
+      suggested: s.weightGrams ? `${s.weightGrams} g` : "",
+      value: s.weightGrams,
+    },
   ];
   const current = item.book ?? EMPTY_BOOK;
   return [
