@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import * as Sentry from "@sentry/cloudflare";
 import {
   BOOK_FORMATS,
@@ -103,6 +103,7 @@ export class AutofillError extends Error {}
 export function describeGeminiError(e: unknown): string {
   const status = (e as { status?: number }).status;
   if (status === 429 || status === 503) return "Gemini is busy right now. Please try again in a minute.";
+  if (status === 504) return "Gemini took too long on these photos. Please try again, or remove a few photos.";
   if (status === 400 || status === 403) return `Gemini rejected the request (${status}). Check GEMINI_API_KEY and GEMINI_MODEL.`;
   return `The AI request failed: ${(e as Error).message}`;
 }
@@ -147,7 +148,7 @@ export function normaliseSuggestion(raw: unknown): AutofillSuggestion {
 
 /** Asks Gemini to identify the book in the photos and draft listing data for it. */
 export async function suggestListing(
-  env: Pick<Env, "GEMINI_API_KEY" | "GEMINI_MODEL">,
+  env: Pick<Env, "GEMINI_API_KEY" | "GEMINI_MODEL" | "GEMINI_FALLBACK_MODEL">,
   images: ImageInput[],
   item: Pick<Item, "title" | "description" | "notes">,
 ): Promise<AutofillSuggestion> {
@@ -172,35 +173,47 @@ export async function suggestListing(
   });
 
   // Spans with model, latency and token usage; never the photos or prompt text.
-  const client = new GoogleGenAI({
-    apiKey: env.GEMINI_API_KEY,
-    httpOptions: {
-      timeout: 45_000,
-      // Overload (503) and rate limits (429) are often brief: retry once after ~1.5s. More than that
-      // keeps the seller waiting over a minute when Gemini is genuinely overloaded.
-      retryOptions: { attempts: 2, initialDelay: 1.5, maxDelay: 3, httpStatusCodes: [429, 500, 503, 504] },
-    },
-  });
-  const ai = Sentry.instrumentGoogleGenAIClient(client, {
+  const ai = Sentry.instrumentGoogleGenAIClient(new GoogleGenAI({ apiKey: env.GEMINI_API_KEY }), {
     recordInputs: false,
     recordOutputs: false,
   });
+  // The newest model is often swamped: it then queues requests until the deadline (504) or refuses
+  // them (503/429). Give it a bounded slot and fall back to an older, less busy model.
+  const models = [...new Set([env.GEMINI_MODEL, env.GEMINI_FALLBACK_MODEL].filter(Boolean))];
   let text: string | undefined;
-  try {
-    const res = await ai.models.generateContent({
-      model: env.GEMINI_MODEL,
-      contents: [{ role: "user", parts }],
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseJsonSchema: RESPONSE_SCHEMA,
-        temperature: 0.2,
-      },
-    });
-    text = res.text;
-  } catch (e) {
-    console.error("Gemini request failed", e);
-    throw new AutofillError(describeGeminiError(e));
+  for (const [i, model] of models.entries()) {
+    const last = i === models.length - 1;
+    try {
+      const res = await ai.models.generateContent({
+        model,
+        contents: [{ role: "user", parts }],
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          responseMimeType: "application/json",
+          responseJsonSchema: RESPONSE_SCHEMA,
+          temperature: 0.2,
+          // Reading a copyright page doesn't need deep reasoning, and default thinking is most of the latency.
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          httpOptions: {
+            // The SDK also sends this as X-Server-Timeout, so it is Gemini's own deadline: past it
+            // Gemini answers 504 DEADLINE_EXCEEDED.
+            timeout: last ? 60_000 : 30_000,
+            // Brief overloads often clear within seconds; retry once on the model we end up with.
+            // Never 504: a request that ran out of time would just keep the seller waiting again.
+            retryOptions: last
+              ? { attempts: 2, initialDelay: 1.5, maxDelay: 3, httpStatusCodes: [429, 500, 503] }
+              : { attempts: 1 },
+          },
+        },
+      });
+      text = res.text;
+      break;
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      // Workers logs keep only the stack of an Error argument, so log the status and body explicitly.
+      console.error("Gemini request failed", { model, status, message: (e as Error).message });
+      if (last || !(status === 429 || status === 503 || status === 504)) throw new AutofillError(describeGeminiError(e));
+    }
   }
   if (!text) throw new AutofillError("The AI didn't return anything. Try again, or add clearer photos.");
 

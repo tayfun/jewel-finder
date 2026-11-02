@@ -42,9 +42,11 @@
 	"version_metadata": {
 		"binding": "CF_VERSION_METADATA"
 	},
-	// Model used for "Auto-fill from photos". The API key is the GEMINI_API_KEY secret.
+	// Model used for "Auto-fill from photos", and the one tried when it is overloaded.
+	// The API key is the GEMINI_API_KEY secret.
 	"vars": {
 		"GEMINI_MODEL": "gemini-3.8-flash",
+		"GEMINI_FALLBACK_MODEL": "gemini-3.5-flash",
 		// Overridden to "development" in .dev.vars. The DSN is the SENTRY_DSN secret.
 		"SENTRY_ENVIRONMENT": "production"
 	},

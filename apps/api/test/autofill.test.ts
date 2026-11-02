@@ -113,12 +113,38 @@ describe("POST /api/items/:id/autofill", () => {
     expect(res.status).toBe(502);
     expect(res.data.error).toMatch(/Gemini rejected the request \(400\)/);
   });
+
+  it("falls back to the older model when the newest one times out", async () => {
+    const { token, item } = await itemWithPhoto();
+    const realFetch = globalThis.fetch;
+    const calls: { model: string; timeout: string | null }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const req = new Request(input, init);
+      if (!req.url.includes("generativelanguage.googleapis.com")) return realFetch(input, init);
+      const model = req.url.match(/models\/([^:]+):/)![1];
+      calls.push({ model, timeout: req.headers.get("x-server-timeout") });
+      if (model === "gemini-3.8-flash") {
+        return Response.json({ error: { code: 504, message: "Deadline expired", status: "DEADLINE_EXCEEDED" } }, { status: 504 });
+      }
+      return Response.json({ candidates: [{ content: { role: "model", parts: [{ text: JSON.stringify(modelOutput) }] } }] });
+    });
+
+    const res = await call<{ suggestion: AutofillSuggestion }>(`/api/items/${item.id}/autofill`, { token, json: {} });
+    expect(res.status).toBe(200);
+    expect(res.data.suggestion.book.author).toBe("J.K. Rowling");
+    // One bounded try on the primary (no retry of a 504), then the fallback.
+    expect(calls).toEqual([
+      { model: "gemini-3.8-flash", timeout: "30" },
+      { model: "gemini-3.5-flash", timeout: "60" },
+    ]);
+  });
 });
 
 describe("describeGeminiError", () => {
   it("explains common failures", () => {
     expect(describeGeminiError(Object.assign(new Error("x"), { status: 503 }))).toMatch(/busy/);
     expect(describeGeminiError(Object.assign(new Error("x"), { status: 429 }))).toMatch(/busy/);
+    expect(describeGeminiError(Object.assign(new Error("x"), { status: 504 }))).toMatch(/too long/);
     expect(describeGeminiError(new Error("network down"))).toBe("The AI request failed: network down");
   });
 });

@@ -43,7 +43,7 @@ their DOM regularly — that's the first place to look when a field stops fillin
 "✨ Auto-fill from photos" on an item page sends the item's photos to Gemini and suggests a title,
 description, condition, category, tags and book details (author, ISBN, edition, printing, rarity…).
 You review and tick what to apply. Put a key from https://aistudio.google.com/apikey in
-`apps/api/.dev.vars` as `GEMINI_API_KEY=...` (the model is `GEMINI_MODEL` in `wrangler.jsonc`).
+`apps/api/.dev.vars` as `GEMINI_API_KEY=...` (the model is `GEMINI_MODEL` in `wrangler.jsonc`; when it is overloaded the Worker falls back to `GEMINI_FALLBACK_MODEL`).
 The prompt and response schema live in `apps/api/src/ai.ts`.
 
 ### Error monitoring (Sentry)
