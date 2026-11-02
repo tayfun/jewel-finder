@@ -55,8 +55,10 @@ Both are off until a DSN is set, so local dev sends nothing by default.
   `SENTRY_ENVIRONMENT` is `production` in `wrangler.jsonc` and `development` in `.dev.vars`.
 - **Web app:** `VITE_SENTRY_DSN` (and optionally `VITE_SENTRY_ENVIRONMENT`) in the build environment,
   e.g. `apps/web/.env.local`. Browser traces continue into the API, so a slow page shows its Worker spans.
-- **Readable stack traces:** set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` when running
-  the web build; source maps are uploaded and then deleted from `dist/`.
+- **Readable stack traces:** `pnpm run deploy` uploads source maps for both projects when
+  `SENTRY_AUTH_TOKEN` is set (copy `.env.sentry.example` to `.env.sentry`). Bundles and maps are
+  matched by debug IDs, so no release bookkeeping is needed; web maps are deleted from `dist/`
+  after upload so they're never served. API events are tagged with the deployed Worker version.
 
 Events carry only the account id (no email). Request bodies, cookies, SQL values and Gemini prompts
 and photos are not sent. 4xx responses and the 503 "not configured" response aren't reported.
@@ -69,6 +71,9 @@ npx wrangler r2 bucket create jewel-finder-images
 npx wrangler secret put JWT_SECRET      # a long random string
 npx wrangler secret put GEMINI_API_KEY  # Google AI Studio key, for "Auto-fill from photos"
 npx wrangler secret put SENTRY_DSN      # Sentry project DSN for the API (optional)
-cd ../.. && VITE_SENTRY_DSN=... pnpm run deploy   # builds the web app, deploys Worker + assets
+cd ../..
+cp .env.sentry.example .env.sentry      # optional: Sentry auth token + web DSN
+pnpm run deploy -- --dry-run            # check: builds everything, uploads/deploys nothing
+pnpm run deploy                         # web build → Worker bundle → source maps → wrangler deploy
 API_URL=https://jewel-finder.<you>.workers.dev pnpm build:ext
 ```

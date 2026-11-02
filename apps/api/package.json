@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "node -e \"require('fs').mkdirSync('../web/dist',{recursive:true})\" && wrangler dev --port 8787",
-    "deploy": "wrangler deploy",
+    "deploy": "node ../../scripts/deploy.mjs",
     "typegen": "wrangler types",
     "typecheck": "tsc -p .",
     "test": "node -e \"require('fs').mkdirSync('../web/dist',{recursive:true})\" && vitest run"
@@ -18,6 +18,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.4.11",
+    "@sentry/cli": "^3.8.2",
     "vitest": "^4.1.0",
     "wrangler": "^4.156.1"
   }

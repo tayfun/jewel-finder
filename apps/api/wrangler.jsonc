@@ -38,6 +38,10 @@
 			"bucket_name": "jewel-finder-images"
 		}
 	],
+	// Deployed version id; Sentry uses it as the release for every event.
+	"version_metadata": {
+		"binding": "CF_VERSION_METADATA"
+	},
 	// Model used for "Auto-fill from photos". The API key is the GEMINI_API_KEY secret.
 	"vars": {
 		"GEMINI_MODEL": "gemini-3.8-flash",
