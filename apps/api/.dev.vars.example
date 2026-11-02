@@ -1,0 +1,4 @@
+JWT_SECRET=dev-secret-change-me
+# Throwaway local account used when trying the app in dev (not read by the Worker):
+# DEMO_EMAIL=demo@example.com
+# DEMO_PASSWORD=demo-pass-1234

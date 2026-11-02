@@ -1,0 +1,22 @@
+{
+  "name": "@jf/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node -e \"require('fs').mkdirSync('../web/dist',{recursive:true})\" && wrangler dev --port 8787",
+    "deploy": "wrangler deploy",
+    "typegen": "wrangler types",
+    "typecheck": "tsc -p .",
+    "test": "node -e \"require('fs').mkdirSync('../web/dist',{recursive:true})\" && vitest run"
+  },
+  "dependencies": {
+    "@jf/shared": "workspace:*",
+    "hono": "^4.13.16",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.11",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.156.1"
+  }
+}

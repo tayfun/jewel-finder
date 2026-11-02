@@ -1,0 +1,18 @@
+{
+  "name": "jewel-finder",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.0.0",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,green \"pnpm --filter @jf/api dev\" \"pnpm --filter @jf/web dev\"",
+    "build": "pnpm --filter @jf/web build && pnpm --filter @jf/extension build",
+    "build:ext": "pnpm --filter @jf/extension build",
+    "deploy": "pnpm --filter @jf/web build && pnpm --filter @jf/api deploy",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,124 @@
+import { useRef, useState } from "react";
+import { api } from "../api";
+
+const MAX_EDGE = 2000;
+
+/** Downscale big JPEG/PNG/WebP photos in the browser before upload. HEIC etc. go up as-is. */
+async function shrink(file: File): Promise<Blob> {
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < 1_000_000) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size < 4_000_000) return file;
+    const canvas = new OffscreenCanvas(Math.round(bitmap.width * scale), Math.round(bitmap.height * scale));
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return await canvas.convertToBlob({ type: "image/jpeg", quality: 0.88 });
+  } catch {
+    return file;
+  }
+}
+
+/** `onChange` takes an updater because uploads finish asynchronously, after other edits. */
+export function PhotoUploader({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange(update: (keys: string[]) => string[]): void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  async function upload(files: FileList | File[]) {
+    setError(null);
+    const list = [...files].filter((f) => f.type.startsWith("image/"));
+    setUploading((n) => n + list.length);
+    for (const file of list) {
+      try {
+        const blob = await shrink(file);
+        const res = await api<{ key: string }>("/api/images", { body: blob, contentType: blob.type });
+        onChange((keys) => [...keys, res.key]);
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+  }
+
+  function move(i: number, by: number) {
+    onChange((keys) => {
+      const next = [...keys];
+      const [k] = next.splice(i, 1);
+      next.splice(i + by, 0, k!);
+      return next;
+    });
+  }
+
+  return (
+    <div>
+      <div
+        className={`photos ${dragging ? "dragging" : ""}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          void upload(e.dataTransfer.files);
+        }}
+      >
+        {value.map((key, i) => (
+          <figure key={key} className="photo">
+            <img src={`/images/${key}`} alt="" />
+            {i === 0 && <span className="cover">Cover</span>}
+            <div className="photo-actions">
+              <button type="button" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move left">
+                ←
+              </button>
+              <button type="button" onClick={() => onChange((keys) => keys.filter((k) => k !== key))} aria-label="Remove">
+                ✕
+              </button>
+              <button
+                type="button"
+                disabled={i === value.length - 1}
+                onClick={() => move(i, 1)}
+                aria-label="Move right"
+              >
+                →
+              </button>
+            </div>
+          </figure>
+        ))}
+        {Array.from({ length: uploading }, (_, i) => (
+          <div key={`u${i}`} className="photo placeholder">
+            Uploading…
+          </div>
+        ))}
+        {value.length + uploading < 20 && (
+          <button type="button" className="photo add" onClick={() => input.current?.click()}>
+            <span>+</span>
+            Add photos
+            <small className="muted">or drop them here</small>
+          </button>
+        )}
+      </div>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          if (e.target.files) void upload(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}

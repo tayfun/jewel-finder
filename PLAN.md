@@ -1,0 +1,141 @@
+# Jewel Finder — Plan
+
+Inventory management for people who resell on eBay and Vinted. Users keep their stock in one
+place and push items to marketplaces through a Chrome extension that fills in the marketplace's
+own "sell an item" form (no marketplace APIs — Vinted has none, and we don't want eBay's).
+
+## 1. Architecture
+
+```
+┌──────────────────────┐        ┌──────────────────────────────────────────────┐
+│  Web app (React SPA) │──/api──▶  Cloudflare Worker  (apps/api, Hono)          │
+│  apps/web            │        │   ├─ /api/auth/*     register / login (JWT)   │
+└─────────▲────────────┘        │   ├─ /api/items/*    inventory CRUD           │
+          │ window.postMessage  │   ├─ /api/listings/* marketplace listing state│
+┌─────────┴────────────┐        │   ├─ /api/images     upload → R2              │
+│  Chrome extension    │──/api──▶   └─ /images/*       public image delivery    │
+│  apps/extension      │        │                                              │
+│   ├─ side panel UI   │        │  AccountDO (Durable Object, SQLite storage)  │
+│   ├─ background SW   │        │   one instance per user: account, items,     │
+│   └─ content scripts │        │   listings                                   │
+│      (vinted, ebay,  │        │  R2 bucket: item photos                      │
+│       web bridge)    │        │  Static assets: the built web app            │
+└──────────────────────┘        └──────────────────────────────────────────────┘
+```
+
+**Decisions**
+
+| Topic | Decision | Why |
+|---|---|---|
+| Repo | pnpm workspace monorepo: `apps/api`, `apps/web`, `apps/extension`, `packages/shared` | One set of types/validation shared by all three parts |
+| Backend | One Cloudflare Worker using Hono for routing, zod for validation | Small, fast, idiomatic on Workers |
+| Storage | One **Durable Object per user** (`AccountDO`) with the SQLite storage backend; called via Workers RPC | Per-user data is naturally isolated, strongly consistent, no D1 schema/tenancy filtering needed. Scales horizontally by user |
+| User lookup | DO is addressed by `idFromName(normalisedEmail)`; the JWT `sub` is the DO id | No global users table needed. (Changing email later would need an email→id index — out of scope for v1) |
+| Auth | Email + password, PBKDF2-SHA256 (WebCrypto), HS256 JWT bearer tokens (30 days) | Works identically for the web app and the extension; no cookies across origins |
+| Images | R2, key `u/<userId>/<uuid>`. Served publicly from `/images/<key>` (unguessable key, CORS `*`) | `<img>` tags and the extension's content scripts can load them without auth headers |
+| Frontend hosting | Built SPA is served by the **same Worker** via Workers Static Assets | Same origin → no CORS for the web app, one deploy |
+| Extension build | esbuild script (no framework), Manifest V3, side panel UI | Content scripts must be classic scripts; esbuild keeps it predictable |
+| Posting | Extension opens the marketplace's sell page in a tab and **fills** it; the user reviews and presses the marketplace's own submit button | No API, respects the user's control, far less brittle than full automation |
+| Web → extension | A bridge content script on the web app origin relays `window.postMessage` requests to the background worker | No need to hard-code the extension id in the web app |
+
+## 2. Data model (per-user SQLite inside `AccountDO`)
+
+- **account**: `id, email, password_hash, settings (json), created_at`
+  - settings: `currency` (GBP default), `vintedDomain` (www.vinted.co.uk), `ebayDomain` (www.ebay.co.uk)
+- **items**: `id, sku, title, description, brand, category, size, colour, condition, price, cost,
+  quantity, status, images (json array of R2 keys), tags (json), notes, created_at, updated_at`
+  - money stored as integer minor units (pence)
+  - `condition`: `new_with_tags | new_without_tags | very_good | good | satisfactory`
+    (Vinted's scale; mapped to eBay's at fill time)
+  - `status`: `draft | in_stock | sold | archived`
+- **listings**: `id, item_id, marketplace (vinted|ebay), status (pending|listed|sold|ended|failed),
+  external_id, url, price, error, created_at, updated_at` — unique on `(item_id, marketplace)`
+
+## 3. API surface
+
+```
+POST   /api/auth/register      {email,password}            → {token, account}
+POST   /api/auth/login         {email,password}            → {token, account}
+GET    /api/me                                             → account
+PATCH  /api/me/settings        partial settings            → account
+GET    /api/items?q=&status=                               → {items}
+POST   /api/items              ItemInput                   → item
+GET    /api/items/:id                                      → item (+ listings)
+PATCH  /api/items/:id          partial ItemInput           → item
+DELETE /api/items/:id                                      → 204
+POST   /api/items/:id/sold     {marketplace?}              → item   (marks other listings ended)
+PUT    /api/items/:id/listings/:marketplace  ListingInput  → listing (upsert)
+DELETE /api/items/:id/listings/:marketplace                → 204
+GET    /api/stats                                          → counts + stock value
+POST   /api/images             raw image body              → {key, url}
+GET    /images/:key                                        → image bytes (public)
+```
+
+## 4. Chrome extension flow
+
+1. User signs in inside the side panel (same `/api/auth/login`); token kept in `chrome.storage.local`.
+2. Side panel lists inventory (search + status filter) with "Vinted" / "eBay" buttons per item.
+   The same action can be started from the web app (via the bridge content script).
+3. Background worker: fetches the item, upserts a `pending` listing, opens the marketplace sell
+   page (`https://<vintedDomain>/items/new`, `https://<ebayDomain>/sl/prelist/suggest`), and stores a
+   job `{tabId → itemId, marketplace}` in `chrome.storage.session`.
+4. Marketplace content script asks the background for its job, then fills what it can:
+   photos (via `DataTransfer` on the file input), title, description, price, and best-effort
+   brand/size/condition. React-controlled inputs are set with the native value setter + `input` events.
+   A banner tells the user what was filled and what still needs attention.
+5. When the page navigates to a published listing URL, the content script reports
+   `{url, externalId}` → background → `PUT /api/items/:id/listings/:marketplace {status: listed}`.
+
+Selectors live in one adapter file per marketplace with multiple fallback strategies
+(test ids → names → label text → placeholders) because marketplace DOMs change without notice.
+
+## 5. Implementation steps
+
+Status (2026-11-02): steps 1–5 are implemented. Tests: shared 6, API 7 (in workerd), extension 12
+(happy-dom, incl. a real React-controlled form). The web app was exercised end to end in a browser.
+**Not yet verified against the live Vinted/eBay sites** — the content-script selectors are
+best-effort and need checking with a real seller account (see section 8).
+
+1. **Scaffold** — pnpm workspace, root tsconfig, `packages/shared` (zod schemas, types, money
+   helpers, marketplace constants & URL builders).
+2. **Backend** — Worker + Hono routes, `AccountDO` with SQLite migrations and RPC methods, JWT +
+   PBKDF2 auth, R2 image upload/serve, CORS for the extension, static-asset fallback to the SPA.
+   Tests with `@cloudflare/vitest-pool-workers`.
+3. **Web app** — Vite + React + React Router: login/register, inventory grid with search/filter,
+   dashboard stats, item create/edit with photo upload, item page with per-marketplace listing
+   status and actions (list via extension, mark listed manually, mark sold, archive, delete,
+   duplicate), settings page. Detects whether the extension is installed.
+4. **Chrome extension** — MV3 manifest, background service worker (API client, job orchestration),
+   side panel (login, inventory, list buttons), content scripts for Vinted and eBay, web bridge.
+   Unit tests for the form-filling helpers (happy-dom).
+5. **Verify** — typecheck everything, run tests, run `wrangler dev` + Vite, exercise the web app
+   end to end in a browser, build the extension.
+
+## 6. Running locally
+
+```bash
+pnpm install
+pnpm dev            # wrangler dev (API on :8787) + vite (web on :5173, proxies /api)
+pnpm build:ext      # → apps/extension/dist, load unpacked in chrome://extensions
+pnpm test
+```
+
+Deploy: `pnpm deploy` (builds the web app, then `wrangler deploy` with it as static assets).
+Set the secret first: `wrangler secret put JWT_SECRET`. Build the extension against production
+with `API_URL=https://<your-worker>.workers.dev pnpm build:ext`.
+
+## 7. Later / out of scope for v1
+
+- Cross-delisting: when an item sells on one marketplace, open the others and end the listing.
+- Importing existing listings from Vinted/eBay (scrape "my items" pages via the extension).
+- Bulk actions, CSV import/export, multi-quantity stock with per-sale tracking, profit reports.
+- Email verification, password reset, email change (needs an email→account index).
+- Image editing (crop/rotate/background removal), signed/private image URLs.
+- Category/size mapping tables per marketplace for fuller auto-fill.
+
+## 8. Next up
+
+1. Load the extension against live Vinted and eBay with a seller account; adjust selectors in
+   `apps/extension/src/content/{vinted,ebay}.ts` and add fixtures captured from the real pages to the tests.
+2. Rate-limit `/api/auth/*` (Workers Rate Limiting binding).
+3. Cross-delisting when an item sells (section 7).
