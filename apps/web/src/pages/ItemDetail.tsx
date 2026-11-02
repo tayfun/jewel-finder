@@ -245,6 +245,18 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
     onChange();
   }
 
+  // Why "List on …" can't be used right now, shown under the button.
+  const blocked =
+    item.status === "sold"
+      ? "Item is marked as sold"
+      : !item.images.length
+        ? "Add a photo first"
+        : extension === null
+          ? "Checking for the extension…"
+          : extension === false
+            ? "Extension not detected"
+            : null;
+
   return (
     <section className="card">
       <h2>Marketplaces</h2>
@@ -256,6 +268,7 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
       <ul className="listings">
         {MARKETPLACES.map((m) => {
           const l: Listing | undefined = byMarket.get(m);
+          const canList = !l || l.status === "pending" || l.status === "failed" || l.status === "ended";
           return (
             <li key={m}>
               <div className="listing-head">
@@ -269,8 +282,13 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
               </div>
               {l?.error && <p className="error small">{l.error}</p>}
               <div className="actions">
-                {(!l || l.status === "pending" || l.status === "failed" || l.status === "ended") && (
-                  <button className="primary" disabled={!!busy || !extension || item.status === "sold"} onClick={() => list(m)}>
+                {canList && (
+                  <button
+                    className="primary"
+                    disabled={!!busy || !!blocked}
+                    title={blocked ?? `Open ${MARKETPLACE_LABELS[m]} and fill in this item`}
+                    onClick={() => list(m)}
+                  >
                     {busy === m ? "Opening…" : l?.status === "pending" ? "Try again" : `List on ${MARKETPLACE_LABELS[m]}`}
                   </button>
                 )}
@@ -283,6 +301,7 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
                   </button>
                 )}
               </div>
+              {canList && blocked && <p className="muted small reason">{blocked}</p>}
               {manual === m && (
                 <div className="inline-form">
                   <input
