@@ -1,8 +1,10 @@
+import { Sentry } from "./sentry";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router";
 import { AuthProvider } from "./auth";
 import { RequireAuth } from "./components/Layout";
+import { ErrorScreen, RouteError } from "./components/ErrorScreen";
 import { Login, Signup } from "./pages/Auth";
 import { Home } from "./pages/Home";
 import { ItemDetail } from "./pages/ItemDetail";
@@ -10,7 +12,13 @@ import { EditItem, NewItem } from "./pages/ItemEditor";
 import { Settings } from "./pages/Settings";
 import "./styles.css";
 
-const router = createBrowserRouter([
+// Navigation spans are named after route patterns (/items/:id) instead of raw URLs.
+const createRouter = Sentry.wrapCreateBrowserRouter(createBrowserRouter);
+
+const router = createRouter([
+  {
+    errorElement: <RouteError />,
+    children: [
   { path: "/", element: <Home /> },
   { path: "/login", element: <Login /> },
   { path: "/signup", element: <Signup /> },
@@ -23,12 +31,20 @@ const router = createBrowserRouter([
       { path: "/settings", element: <Settings /> },
     ],
   },
+    ],
+  },
 ]);
 
-createRoot(document.getElementById("root")!).render(
+createRoot(document.getElementById("root")!, {
+  onUncaughtError: Sentry.reactErrorHandler(),
+  onCaughtError: Sentry.reactErrorHandler(),
+  onRecoverableError: Sentry.reactErrorHandler(),
+}).render(
   <StrictMode>
-    <AuthProvider>
-      <RouterProvider router={router} />
-    </AuthProvider>
+    <Sentry.ErrorBoundary fallback={<ErrorScreen />}>
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
+    </Sentry.ErrorBoundary>
   </StrictMode>,
 );

@@ -11,12 +11,14 @@ import {
   type AuthResponse,
   type AutofillSuggestion,
 } from "@jf/shared";
+import * as Sentry from "@sentry/cloudflare";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { AutofillError, suggestListing } from "./ai";
 import { hashPassword, issueToken, readToken, verifyPassword } from "./auth";
+import { sentryOptions } from "./sentry";
 
 export { AccountDO } from "./account-do";
 
@@ -61,6 +63,17 @@ function assertOwnImages(userId: string, keys: string[] | undefined) {
 }
 
 const app = new Hono<AppEnv>();
+
+// Request spans + capture of 5xx errors, including ones onError turns into responses.
+// 503 is "feature not configured", which isn't worth an alert.
+app.use(
+  Sentry.honoMiddleware(app, {
+    shouldHandleError: (err) => {
+      const status = err instanceof HTTPException ? err.status : 500;
+      return status >= 500 && status !== 503;
+    },
+  }),
+);
 
 app.use(
   "/api/*",
@@ -114,6 +127,7 @@ app.use("/api/*", async (c, next) => {
     throw new HTTPException(401, { message: "Not signed in" });
   }
   c.set("userId", claims.sub);
+  Sentry.setUser({ id: claims.sub });
   c.set("account", c.env.ACCOUNT.get(id));
   await next();
 });
@@ -259,4 +273,4 @@ app.all("/api/*", (c) => c.json<ApiError>({ error: "Not found" }, 404));
 // Anything else is the web app (normally handled by the assets layer before we run).
 app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 
-export default app;
+export default Sentry.withSentry(sentryOptions, { fetch: app.fetch } satisfies ExportedHandler<Env>);

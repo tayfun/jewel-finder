@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import * as Sentry from "@sentry/cloudflare";
 import {
   BOOK_FORMATS,
   BookDetails,
@@ -98,6 +99,14 @@ const ModelOutput = z.object({
 
 export class AutofillError extends Error {}
 
+/** Turns a Gemini SDK error into something a seller can act on. */
+export function describeGeminiError(e: unknown): string {
+  const status = (e as { status?: number }).status;
+  if (status === 429 || status === 503) return "Gemini is busy right now. Please try again in a minute.";
+  if (status === 400 || status === 403) return `Gemini rejected the request (${status}). Check GEMINI_API_KEY and GEMINI_MODEL.`;
+  return `The AI request failed: ${(e as Error).message}`;
+}
+
 function toBase64(bytes: Uint8Array): string {
   let binary = "";
   for (let i = 0; i < bytes.length; i += 0x8000) {
@@ -162,7 +171,20 @@ export async function suggestListing(
     text: `Identify this book and draft its listing.${known.length ? `\n\nWhat the seller already wrote (may be incomplete or wrong; prefer the photos):\n${known.join("\n")}` : ""}`,
   });
 
-  const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+  // Spans with model, latency and token usage; never the photos or prompt text.
+  const client = new GoogleGenAI({
+    apiKey: env.GEMINI_API_KEY,
+    httpOptions: {
+      timeout: 45_000,
+      // Overload (503) and rate limits (429) are often brief: retry once after ~1.5s. More than that
+      // keeps the seller waiting over a minute when Gemini is genuinely overloaded.
+      retryOptions: { attempts: 2, initialDelay: 1.5, maxDelay: 3, httpStatusCodes: [429, 500, 503, 504] },
+    },
+  });
+  const ai = Sentry.instrumentGoogleGenAIClient(client, {
+    recordInputs: false,
+    recordOutputs: false,
+  });
   let text: string | undefined;
   try {
     const res = await ai.models.generateContent({
@@ -178,7 +200,7 @@ export async function suggestListing(
     text = res.text;
   } catch (e) {
     console.error("Gemini request failed", e);
-    throw new AutofillError(`The AI request failed: ${(e as Error).message}`);
+    throw new AutofillError(describeGeminiError(e));
   }
   if (!text) throw new AutofillError("The AI didn't return anything. Try again, or add clearer photos.");
 

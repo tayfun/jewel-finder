@@ -1,7 +1,7 @@
 import type { AuthResponse, AutofillSuggestion, ItemWithListings } from "@jf/shared";
 import { exports } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { normaliseSuggestion } from "../src/ai";
+import { describeGeminiError, normaliseSuggestion } from "../src/ai";
 
 const BASE = "https://jf.test";
 const PNG = Uint8Array.from(
@@ -111,7 +111,15 @@ describe("POST /api/items/:id/autofill", () => {
     });
     const res = await call<{ error: string }>(`/api/items/${withPhoto.item.id}/autofill`, { token: withPhoto.token, json: {} });
     expect(res.status).toBe(502);
-    expect(res.data.error).toMatch(/AI request failed/);
+    expect(res.data.error).toMatch(/Gemini rejected the request \(400\)/);
+  });
+});
+
+describe("describeGeminiError", () => {
+  it("explains common failures", () => {
+    expect(describeGeminiError(Object.assign(new Error("x"), { status: 503 }))).toMatch(/busy/);
+    expect(describeGeminiError(Object.assign(new Error("x"), { status: 429 }))).toMatch(/busy/);
+    expect(describeGeminiError(new Error("network down"))).toBe("The AI request failed: network down");
   });
 });
 

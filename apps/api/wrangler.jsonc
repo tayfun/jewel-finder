@@ -40,7 +40,9 @@
 	],
 	// Model used for "Auto-fill from photos". The API key is the GEMINI_API_KEY secret.
 	"vars": {
-		"GEMINI_MODEL": "gemini-3.8-flash"
+		"GEMINI_MODEL": "gemini-3.8-flash",
+		// Overridden to "development" in .dev.vars. The DSN is the SENTRY_DSN secret.
+		"SENTRY_ENVIRONMENT": "production"
 	},
 	"observability": {
 		"enabled": true

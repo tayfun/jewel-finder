@@ -1,6 +1,9 @@
 JWT_SECRET=dev-secret-change-me
 # Google AI Studio key for "Auto-fill from photos" (leave empty to disable the feature).
 GEMINI_API_KEY=
+# Sentry project DSN for the API (leave empty to disable error reporting locally).
+SENTRY_DSN=
+SENTRY_ENVIRONMENT=development
 # Throwaway local account used when trying the app in dev (not read by the Worker):
 # DEMO_EMAIL=demo@example.com
 # DEMO_PASSWORD=demo-pass-1234

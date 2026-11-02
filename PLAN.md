@@ -37,6 +37,7 @@ own "sell an item" form (no marketplace APIs — Vinted has none, and we don't w
 | Extension build | esbuild script (no framework), Manifest V3, side panel UI | Content scripts must be classic scripts; esbuild keeps it predictable |
 | Posting | Extension opens the marketplace's sell page in a tab and **fills** it; the user reviews and presses the marketplace's own submit button | No API, respects the user's control, far less brittle than full automation |
 | AI listing data | Gemini (`@google/genai`, model in `GEMINI_MODEL`, default `gemini-3.8-flash`) called from the Worker with the item's photos and a `responseJsonSchema`; the result is validated (zod + ISBN check digit) and shown for review before anything is saved | Key stays server-side; structured output; the seller stays in control of what gets written |
+| Monitoring | Sentry: `@sentry/cloudflare` (`withSentry`, Hono middleware, Durable Object wrapper, Gemini spans) and `@sentry/react` (router tracing, error boundary, route errors); traces propagate browser → Worker | Errors and slow requests visible end to end; DSN-less environments send nothing; only the account id is attached |
 | Web → extension | A bridge content script on the web app origin relays `window.postMessage` requests to the background worker | No need to hard-code the extension id in the web app |
 
 ## 2. Data model (per-user SQLite inside `AccountDO`)
@@ -124,7 +125,7 @@ pnpm build:ext      # → apps/extension/dist, load unpacked in chrome://extensi
 pnpm test
 ```
 
-Deploy: `pnpm deploy` (builds the web app, then `wrangler deploy` with it as static assets).
+Deploy: `pnpm run deploy` (builds the web app, then `wrangler deploy` with it as static assets).
 Set the secret first: `wrangler secret put JWT_SECRET`. Build the extension against production
 with `API_URL=https://<your-worker>.workers.dev pnpm build:ext`.
 

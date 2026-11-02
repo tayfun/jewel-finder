@@ -1,6 +1,7 @@
 import type { Account, AuthResponse, Credentials } from "@jf/shared";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, getToken, setToken, setUnauthorizedHandler } from "./api";
+import { Sentry } from "./sentry";
 
 interface AuthState {
   account: Account | null;
@@ -30,6 +31,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(logout)
       .finally(() => setLoading(false));
   }, [logout]);
+
+  // Tag errors with the account id (never the email).
+  useEffect(() => {
+    Sentry.setUser(account ? { id: account.id } : null);
+  }, [account]);
 
   const value = useMemo<AuthState>(() => {
     const signIn = (path: string) => async (creds: Credentials) => {

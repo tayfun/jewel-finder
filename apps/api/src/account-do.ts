@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/cloudflare";
 import { DurableObject } from "cloudflare:workers";
 import {
   ITEM_STATUSES,
@@ -14,6 +15,7 @@ import {
   type Marketplace,
   type Stats,
 } from "@jf/shared";
+import { sentryOptions } from "./sentry";
 
 /** Each entry runs once, in order. Never edit a shipped migration; append a new one. */
 const MIGRATIONS = [
@@ -110,7 +112,7 @@ export type RegisterResult = { ok: true; account: Account } | { ok: false; error
  * One instance per user, addressed by idFromName(email). Holds the account,
  * the inventory and marketplace listing state in SQLite.
  */
-export class AccountDO extends DurableObject<Env> {
+class AccountDOBase extends DurableObject<Env> {
   private sql: SqlStorage;
   private migrated = false;
 
@@ -395,3 +397,7 @@ export class AccountDO extends DurableObject<Env> {
     return { byStatus, listed, stockValue: value.v ?? 0, stockCost: value.c ?? 0 };
   }
 }
+
+/** Errors and RPC spans from the Durable Object go to Sentry too. */
+export const AccountDO = Sentry.instrumentDurableObjectWithSentry(sentryOptions, AccountDOBase);
+export type AccountDO = AccountDOBase;

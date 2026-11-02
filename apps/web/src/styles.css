@@ -434,3 +434,8 @@ label.checkbox input { width: 1rem; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ----- crash / 404 screen */
+.error-screen { min-height: 70vh; display: grid; place-items: center; padding: 1.5rem; }
+.error-screen .card { max-width: 440px; text-align: center; padding: 2rem; }
+.error-screen .actions { justify-content: center; margin-top: 1.2rem; }
