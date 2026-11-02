@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { ThemeToggle } from "../components/ThemeToggle";
 
 const FEATURES = [
   {
@@ -52,6 +53,7 @@ export function Landing() {
           <a href="#how">How it works</a>
         </nav>
         <div className="actions">
+          <ThemeToggle />
           <Link to="/login" className="button ghost">
             Sign in
           </Link>

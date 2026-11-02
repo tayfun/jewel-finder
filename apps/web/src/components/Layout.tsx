@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { NavLink, Navigate, Outlet, useLocation } from "react-router";
 import { useAuth } from "../auth";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function RequireAuth() {
   const { account, loading } = useAuth();
@@ -27,7 +28,10 @@ export function Layout({ children }: { children?: ReactNode }) {
           <NavLink to="/items/new">Add item</NavLink>
           <NavLink to="/settings">Settings</NavLink>
         </nav>
-        <span className="muted small hide-sm">{account?.email}</span>
+        <div className="topbar-end">
+          <span className="muted small hide-sm">{account?.email}</span>
+          <ThemeToggle />
+        </div>
       </header>
       <main className="container">
         {children ?? <Outlet />}

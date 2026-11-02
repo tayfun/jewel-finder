@@ -8,13 +8,14 @@ import {
   type Listing,
   type Marketplace,
 } from "@jf/shared";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api } from "../api";
 import { useAccount } from "../auth";
 import { BOOK_FIELDS } from "../book";
 import { Autofill } from "../components/Autofill";
 import { StatusBadge } from "../components/Badges";
+import { Lightbox } from "../components/Lightbox";
 import { listViaExtension, useExtension } from "../extension";
 import { useLoad } from "../hooks";
 
@@ -26,6 +27,22 @@ export function ItemDetail() {
   const [photo, setPhoto] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [autofill, setAutofill] = useState(false);
+  const [viewer, setViewer] = useState(false);
+  const imageCount = item?.images.length ?? 0;
+
+  // ←/→ step through photos on the page too (the lightbox handles its own keys while open).
+  useEffect(() => {
+    if (imageCount < 2 || viewer) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const t = e.target as HTMLElement;
+      if (t.closest("input, textarea, select, [contenteditable=true]")) return;
+      if (e.key === "ArrowLeft") setPhoto((p) => (p - 1 + imageCount) % imageCount);
+      else if (e.key === "ArrowRight") setPhoto((p) => (p + 1) % imageCount);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [imageCount, viewer]);
 
   if (error) return <p className="error">{error.message}</p>;
   if (!item) return <p className="muted">Loading…</p>;
@@ -132,7 +149,37 @@ export function ItemDetail() {
         <div className="gallery card">
           {item.images.length ? (
             <>
-              <img className="main-photo" src={`/images/${item.images[Math.min(photo, item.images.length - 1)]}`} alt="" />
+              <div className="main-photo-wrap">
+                <button
+                  className="main-photo-button"
+                  onClick={() => setViewer(true)}
+                  aria-label="View photo full screen"
+                  title="Click to view full screen"
+                >
+                  <img className="main-photo" src={`/images/${item.images[Math.min(photo, item.images.length - 1)]}`} alt="" />
+                </button>
+                {item.images.length > 1 && (
+                  <>
+                    <button
+                      className="photo-nav prev"
+                      onClick={() => setPhoto((p) => (p - 1 + item.images.length) % item.images.length)}
+                      aria-label="Previous photo"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      className="photo-nav next"
+                      onClick={() => setPhoto((p) => (p + 1) % item.images.length)}
+                      aria-label="Next photo"
+                    >
+                      ›
+                    </button>
+                    <span className="photo-count">
+                      {Math.min(photo, item.images.length - 1) + 1} / {item.images.length}
+                    </span>
+                  </>
+                )}
+              </div>
               {item.images.length > 1 && (
                 <div className="thumbs">
                   {item.images.map((k, i) => (
@@ -141,6 +188,14 @@ export function ItemDetail() {
                     </button>
                   ))}
                 </div>
+              )}
+              {viewer && (
+                <Lightbox
+                  images={item.images}
+                  index={Math.min(photo, item.images.length - 1)}
+                  onIndex={setPhoto}
+                  onClose={() => setViewer(false)}
+                />
               )}
             </>
           ) : (

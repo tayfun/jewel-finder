@@ -2,6 +2,7 @@ import type { Account, Settings as SettingsType } from "@jf/shared";
 import { useState, type FormEvent } from "react";
 import { api } from "../api";
 import { useAccount, useAuth } from "../auth";
+import { ThemePicker } from "../components/ThemeToggle";
 import { useExtension } from "../extension";
 
 export function Settings() {
@@ -58,6 +59,11 @@ export function Settings() {
         </form>
 
         <div>
+          <section className="card">
+            <h2>Appearance</h2>
+            <ThemePicker />
+            <p className="muted small">“System” follows your device's light or dark setting. Saved on this browser.</p>
+          </section>
           <section className="card">
             <h2>Chrome extension</h2>
             {extension === null ? (
