@@ -36,6 +36,7 @@ own "sell an item" form (no marketplace APIs — Vinted has none, and we don't w
 | Frontend hosting | Built SPA is served by the **same Worker** via Workers Static Assets | Same origin → no CORS for the web app, one deploy |
 | Extension build | esbuild script (no framework), Manifest V3, side panel UI | Content scripts must be classic scripts; esbuild keeps it predictable |
 | Posting | Extension opens the marketplace's sell page in a tab and **fills** it; the user reviews and presses the marketplace's own submit button | No API, respects the user's control, far less brittle than full automation |
+| AI listing data | Gemini (`@google/genai`, model in `GEMINI_MODEL`, default `gemini-3.8-flash`) called from the Worker with the item's photos and a `responseJsonSchema`; the result is validated (zod + ISBN check digit) and shown for review before anything is saved | Key stays server-side; structured output; the seller stays in control of what gets written |
 | Web → extension | A bridge content script on the web app origin relays `window.postMessage` requests to the background worker | No need to hard-code the extension id in the web app |
 
 ## 2. Data model (per-user SQLite inside `AccountDO`)
@@ -48,6 +49,8 @@ own "sell an item" form (no marketplace APIs — Vinted has none, and we don't w
   - `condition`: `new_with_tags | new_without_tags | very_good | good | satisfactory`
     (Vinted's scale; mapped to eBay's at fill time)
   - `status`: `draft | in_stock | sold | archived`
+  - `book` (json, nullable, migration v2): `author, isbn, publisher, yearPublished, edition, printing,
+    format, language, signed, dustJacket, rarity (common…very_rare), rarityNotes`
 - **listings**: `id, item_id, marketplace (vinted|ebay), status (pending|listed|sold|ended|failed),
   external_id, url, price, error, created_at, updated_at` — unique on `(item_id, marketplace)`
 
@@ -64,6 +67,7 @@ GET    /api/items/:id                                      → item (+ listings)
 PATCH  /api/items/:id          partial ItemInput           → item
 DELETE /api/items/:id                                      → 204
 POST   /api/items/:id/sold     {marketplace?}              → item   (marks other listings ended)
+POST   /api/items/:id/autofill                          → {suggestion} (Gemini, not saved)
 PUT    /api/items/:id/listings/:marketplace  ListingInput  → listing (upsert)
 DELETE /api/items/:id/listings/:marketplace                → 204
 GET    /api/stats                                          → counts + stock value

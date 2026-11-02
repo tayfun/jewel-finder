@@ -12,6 +12,8 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api } from "../api";
 import { useAccount } from "../auth";
+import { BOOK_FIELDS } from "../book";
+import { Autofill } from "../components/Autofill";
 import { StatusBadge } from "../components/Badges";
 import { listViaExtension, useExtension } from "../extension";
 import { useLoad } from "../hooks";
@@ -23,6 +25,7 @@ export function ItemDetail() {
   const { data: item, setData, error, reload } = useLoad(() => api<ItemWithListings>(`/api/items/${id}`), [id]);
   const [photo, setPhoto] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [autofill, setAutofill] = useState(false);
 
   if (error) return <p className="error">{error.message}</p>;
   if (!item) return <p className="muted">Loading…</p>;
@@ -61,6 +64,14 @@ export function ItemDetail() {
           <h1>{item.title}</h1>
         </div>
         <div className="actions">
+          <button
+            className="primary"
+            disabled={!item.images.length || autofill}
+            title={item.images.length ? "Identify the book from its photos and suggest listing details" : "Add a photo first"}
+            onClick={() => setAutofill(true)}
+          >
+            ✨ Auto-fill from photos
+          </button>
           <Link to={`/items/${item.id}/edit`} className="button">
             Edit
           </Link>
@@ -106,6 +117,16 @@ export function ItemDetail() {
         </div>
       </div>
       {actionError && <p className="error">{actionError}</p>}
+      {autofill && (
+        <Autofill
+          item={item}
+          onClose={() => setAutofill(false)}
+          onApplied={(updated) => {
+            setData(updated);
+            setAutofill(false);
+          }}
+        />
+      )}
 
       <div className="detail">
         <div className="gallery card">
@@ -153,6 +174,21 @@ export function ItemDetail() {
               ))}
             </dl>
           </section>
+
+          {item.book && (
+            <section className="card">
+              <h2>Book details</h2>
+              <dl className="details">
+                {BOOK_FIELDS.filter((f) => f.key !== "rarityNotes" && f.show(item.book!)).map((f) => (
+                  <div key={f.key}>
+                    <dt>{f.label}</dt>
+                    <dd>{f.show(item.book!)}</dd>
+                  </div>
+                ))}
+              </dl>
+              {item.book.rarityNotes && <p className="small prewrap rarity-notes">{item.book.rarityNotes}</p>}
+            </section>
+          )}
 
           <Listings item={item} onChange={reload} />
 

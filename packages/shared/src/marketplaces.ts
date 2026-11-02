@@ -1,4 +1,4 @@
-import type { Condition, Marketplace, Settings } from "./schemas";
+import type { BookFormat, Condition, Marketplace, Rarity, Settings } from "./schemas";
 
 export const MARKETPLACE_LABELS: Record<Marketplace, string> = {
   vinted: "Vinted",
@@ -12,6 +12,36 @@ export const CONDITION_LABELS: Record<Condition, string> = {
   good: "Good",
   satisfactory: "Satisfactory",
 };
+
+export const BOOK_FORMAT_LABELS: Record<BookFormat, string> = {
+  hardback: "Hardback",
+  paperback: "Paperback",
+  mass_market_paperback: "Mass-market paperback",
+  leather: "Leather bound",
+  spiral: "Spiral bound",
+  other: "Other",
+};
+
+export const RARITY_LABELS: Record<Rarity, string> = {
+  common: "Common",
+  uncommon: "Uncommon",
+  scarce: "Scarce",
+  rare: "Rare",
+  very_rare: "Very rare",
+};
+
+/** Checks an ISBN-10/13 check digit (input already stripped of spaces and hyphens). */
+export function isValidIsbn(isbn: string): boolean {
+  if (/^\d{9}[\dX]$/.test(isbn)) {
+    const sum = [...isbn].reduce((acc, c, i) => acc + (c === "X" ? 10 : Number(c)) * (10 - i), 0);
+    return sum % 11 === 0;
+  }
+  if (/^\d{13}$/.test(isbn)) {
+    const sum = [...isbn].reduce((acc, c, i) => acc + Number(c) * (i % 2 ? 3 : 1), 0);
+    return sum % 10 === 0;
+  }
+  return false;
+}
 
 /** Closest eBay condition names (clothing/general categories). */
 export const EBAY_CONDITION_LABELS: Record<Condition, string> = {

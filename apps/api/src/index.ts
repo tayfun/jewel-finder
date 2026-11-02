@@ -9,11 +9,13 @@ import {
   imageUrl,
   type ApiError,
   type AuthResponse,
+  type AutofillSuggestion,
 } from "@jf/shared";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { AutofillError, suggestListing } from "./ai";
 import { hashPassword, issueToken, readToken, verifyPassword } from "./auth";
 
 export { AccountDO } from "./account-do";
@@ -187,6 +189,28 @@ app.post("/api/items/:id/duplicate", async (c) => {
 app.post("/api/items/:id/sold", async (c) => {
   const { marketplace } = parse(z.object({ marketplace: Marketplace.optional() }), await body(c));
   return c.json((await c.var.account.markSold(c.req.param("id"), marketplace)) ?? notFound());
+});
+
+// Drafts listing data from the item's photos with Gemini. Returns a suggestion; nothing is saved.
+app.post("/api/items/:id/autofill", async (c) => {
+  if (!c.env.GEMINI_API_KEY) throw new HTTPException(503, { message: "AI auto-fill isn't set up on this server yet" });
+  const item = (await c.var.account.getItem(c.req.param("id"))) ?? notFound();
+  if (!item.images.length) throw new HTTPException(400, { message: "Add at least one photo first" });
+  const images = [];
+  for (const key of item.images) {
+    const obj = await c.env.IMAGES.get(key);
+    if (!obj) continue;
+    images.push({
+      mimeType: obj.httpMetadata?.contentType ?? "image/jpeg",
+      bytes: new Uint8Array(await obj.arrayBuffer()),
+    });
+  }
+  try {
+    return c.json<{ suggestion: AutofillSuggestion }>({ suggestion: await suggestListing(c.env, images, item) });
+  } catch (e) {
+    if (e instanceof AutofillError) throw new HTTPException(502, { message: e.message });
+    throw e;
+  }
 });
 
 app.put("/api/items/:id/listings/:marketplace", async (c) => {

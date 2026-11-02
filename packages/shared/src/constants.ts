@@ -9,3 +9,8 @@ export const CONDITIONS = ["new_with_tags", "new_without_tags", "very_good", "go
 export const ITEM_STATUSES = ["draft", "in_stock", "sold", "archived"] as const;
 
 export const LISTING_STATUSES = ["pending", "listed", "sold", "ended", "failed"] as const;
+
+export const BOOK_FORMATS = ["hardback", "paperback", "mass_market_paperback", "leather", "spiral", "other"] as const;
+
+/** How hard a book is to find, as estimated by the AI or the seller. */
+export const RARITIES = ["common", "uncommon", "scarce", "rare", "very_rare"] as const;

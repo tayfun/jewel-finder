@@ -25,6 +25,7 @@ const item: ItemWithListings = {
   images: ["u/x/1.jpg"],
   tags: [],
   notes: "",
+  book: null,
   createdAt: 0,
   updatedAt: 0,
   listings: [],

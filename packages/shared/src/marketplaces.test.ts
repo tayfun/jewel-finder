@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { parseListingUrl, sellUrl } from "./marketplaces";
+import { isValidIsbn, parseListingUrl, sellUrl } from "./marketplaces";
 import { formatMoney, parseMoney, toDecimal } from "./money";
-import { ItemInput, Settings } from "./schemas";
+import { BookDetails, ItemInput, Settings } from "./schemas";
 
 const settings = Settings.parse({});
 
@@ -57,5 +57,20 @@ describe("ItemPatch", () => {
   it("does not fill in defaults for missing keys", async () => {
     const { ItemPatch } = await import("./schemas");
     expect(ItemPatch.parse({ price: 500 })).toEqual({ price: 500 });
+  });
+});
+
+describe("books", () => {
+  it("validates ISBN check digits", () => {
+    expect(isValidIsbn("9780747532699")).toBe(true);
+    expect(isValidIsbn("0747532699")).toBe(true);
+    expect(isValidIsbn("080442957X")).toBe(true);
+    expect(isValidIsbn("9780747532698")).toBe(false);
+    expect(isValidIsbn("12345")).toBe(false);
+  });
+
+  it("normalises ISBNs and fills defaults", () => {
+    expect(BookDetails.parse({ isbn: "978-0-7475-3269-9" })).toMatchObject({ isbn: "9780747532699", author: "", signed: false });
+    expect(BookDetails.safeParse({ isbn: "12-34" }).success).toBe(false);
   });
 });

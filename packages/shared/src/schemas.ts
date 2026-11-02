@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CONDITIONS, ITEM_STATUSES, LISTING_STATUSES, MARKETPLACES } from "./constants";
+import { BOOK_FORMATS, CONDITIONS, ITEM_STATUSES, LISTING_STATUSES, MARKETPLACES, RARITIES } from "./constants";
 
 export const Marketplace = z.enum(MARKETPLACES);
 export type Marketplace = z.infer<typeof Marketplace>;
@@ -15,6 +15,36 @@ export type ListingStatus = z.infer<typeof ListingStatus>;
 
 /** Money is always integer minor units (pence/cents). */
 const Money = z.int().min(0).max(100_000_000);
+
+export const BookFormat = z.enum(BOOK_FORMATS);
+export type BookFormat = z.infer<typeof BookFormat>;
+export const Rarity = z.enum(RARITIES);
+export type Rarity = z.infer<typeof Rarity>;
+
+/** Bibliographic details for book items. Empty strings / nulls mean "unknown". */
+export const BookDetails = z.object({
+  author: z.string().trim().max(200).default(""),
+  isbn: z
+    .string()
+    .trim()
+    .transform((s) => s.replace(/[\s-]/g, "").toUpperCase())
+    .refine((s) => s === "" || /^(\d{9}[\dX]|\d{13})$/.test(s), "ISBN must be 10 or 13 digits")
+    .default(""),
+  publisher: z.string().trim().max(120).default(""),
+  yearPublished: z.int().min(1400).max(2100).nullable().default(null),
+  /** e.g. "First edition", "Second edition", "Book club edition". */
+  edition: z.string().trim().max(120).default(""),
+  /** e.g. "First printing", "12th impression". */
+  printing: z.string().trim().max(120).default(""),
+  format: BookFormat.nullable().default(null),
+  language: z.string().trim().max(40).default(""),
+  signed: z.boolean().default(false),
+  dustJacket: z.boolean().nullable().default(null),
+  rarity: Rarity.nullable().default(null),
+  /** Why it's collectable: points of issue, provenance, limited run, etc. */
+  rarityNotes: z.string().trim().max(1000).default(""),
+});
+export type BookDetails = z.output<typeof BookDetails>;
 
 /** Item fields without defaults (used as-is, all optional, for PATCH). */
 const itemFields = {
@@ -33,6 +63,7 @@ const itemFields = {
   images: z.array(z.string().max(200)).max(20),
   tags: z.array(z.string().trim().min(1).max(40)).max(30),
   notes: z.string().max(2000),
+  book: BookDetails.nullable(),
 };
 
 export const ItemInput = z.object({
@@ -51,6 +82,7 @@ export const ItemInput = z.object({
   images: itemFields.images.default([]),
   tags: itemFields.tags.default([]),
   notes: itemFields.notes.default(""),
+  book: itemFields.book.default(null),
 });
 export type ItemInput = z.input<typeof ItemInput>;
 /** ItemInput after parsing (defaults applied). */
@@ -76,6 +108,7 @@ export interface Item {
   images: string[];
   tags: string[];
   notes: string;
+  book: BookDetails | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -150,4 +183,19 @@ export interface Stats {
 export interface ApiError {
   error: string;
   issues?: { path: string; message: string }[];
+}
+
+/** What the AI suggests for an item, from its photos. Nothing is saved until the user applies it. */
+export interface AutofillSuggestion {
+  /** Marketplace-ready listing title (≤ 80 chars, fits eBay). */
+  title: string;
+  description: string;
+  condition: Condition | null;
+  category: string;
+  tags: string[];
+  book: BookDetails;
+  /** 0–1: how sure the model is that it identified the right book/edition. */
+  confidence: number;
+  /** Caveats from the model, e.g. "copyright page not shown; edition unverified". */
+  notes: string;
 }

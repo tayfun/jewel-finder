@@ -292,3 +292,31 @@ label input, label select, label textarea { font-weight: 400; }
   .hero-visual { display: none; }
   .feature-grid, .steps { grid-template-columns: 1fr; }
 }
+
+/* ----- book details & AI auto-fill */
+.form-hint { margin: -0.5rem 0 0.8rem; }
+label.checkbox { flex-direction: row; align-items: center; gap: 0.5rem; align-self: end; padding-bottom: 0.5rem; }
+label.checkbox input { width: auto; }
+.rarity-notes { margin: 0.8rem 0 0; color: var(--muted); }
+.autofill { border-color: var(--accent); }
+.autofill-head { display: flex; justify-content: space-between; align-items: center; }
+.autofill-head h2 { margin: 0; }
+.autofill > p { margin: 0.8rem 0; }
+.confidence { display: flex; align-items: center; gap: 0.6rem; margin: 0.8rem 0; font-size: 0.875rem; }
+.confidence meter { width: 160px; height: 0.7rem; }
+.autofill-table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; font-size: 0.9rem; }
+.autofill-table th, .autofill-table td { text-align: left; vertical-align: top; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+.autofill-table thead th { font-size: 0.75rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+.autofill-table tbody th { white-space: nowrap; font-weight: 600; }
+.autofill-table td:first-child { width: 1.5rem; }
+.autofill-table input[type="checkbox"] { width: auto; }
+.autofill-table tr.off td:not(:first-child), .autofill-table tr.off th { opacity: 0.45; }
+.autofill-table td.prewrap { max-width: 28rem; }
+.spinner { display: inline-block; width: 0.9rem; height: 0.9rem; margin-right: 0.4rem; vertical-align: -0.1rem; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) {
+  .autofill-table thead { display: none; }
+  .autofill-table tr { display: grid; grid-template-columns: 1.5rem 1fr; }
+  .autofill-table td.muted { display: none; }
+  .autofill-table td.prewrap:last-child { grid-column: 2; }
+}

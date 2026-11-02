@@ -1,7 +1,13 @@
 import {
+  BOOK_FORMATS,
+  BOOK_FORMAT_LABELS,
   CONDITIONS,
   CONDITION_LABELS,
   ITEM_STATUSES,
+  RARITIES,
+  RARITY_LABELS,
+  type BookFormat,
+  type Rarity,
   parseMoney,
   toDecimal,
   type Condition,
@@ -10,6 +16,7 @@ import {
   type ItemStatus,
 } from "@jf/shared";
 import { useState, type FormEvent } from "react";
+import { EMPTY_BOOK, bookOrNull } from "../book";
 import { STATUS_LABELS } from "./Badges";
 import { PhotoUploader } from "./PhotoUploader";
 
@@ -29,6 +36,23 @@ interface FormState {
   tags: string;
   notes: string;
   images: string[];
+  book: BookForm;
+}
+
+/** Book details as form strings. */
+interface BookForm {
+  author: string;
+  isbn: string;
+  publisher: string;
+  yearPublished: string;
+  edition: string;
+  printing: string;
+  format: BookFormat | "";
+  language: string;
+  signed: boolean;
+  dustJacket: "" | "yes" | "no";
+  rarity: Rarity | "";
+  rarityNotes: string;
 }
 
 function toForm(item?: Partial<Item>): FormState {
@@ -48,6 +72,17 @@ function toForm(item?: Partial<Item>): FormState {
     tags: (item?.tags ?? []).join(", "),
     notes: item?.notes ?? "",
     images: item?.images ?? [],
+    book: toBookForm(item?.book ?? EMPTY_BOOK),
+  };
+}
+
+function toBookForm(b: NonNullable<Item["book"]>): BookForm {
+  return {
+    ...b,
+    yearPublished: b.yearPublished ? String(b.yearPublished) : "",
+    format: b.format ?? "",
+    dustJacket: b.dustJacket == null ? "" : b.dustJacket ? "yes" : "no",
+    rarity: b.rarity ?? "",
   };
 }
 
@@ -58,6 +93,10 @@ function fromForm(f: FormState): ItemInput | string {
   if (Number.isNaN(cost)) return "Cost must be a number, e.g. 4.00";
   const quantity = Number.parseInt(f.quantity, 10);
   if (!Number.isInteger(quantity) || quantity < 0) return "Quantity must be a whole number";
+  const year = f.book.yearPublished.trim() ? Number(f.book.yearPublished) : null;
+  if (year != null && !(Number.isInteger(year) && year >= 1400 && year <= 2100)) return "Year published must be a year, e.g. 1997";
+  const isbn = f.book.isbn.replace(/[\s-]/g, "").toUpperCase();
+  if (isbn && !/^(\d{9}[\dX]|\d{13})$/.test(isbn)) return "ISBN must be 10 or 13 digits";
   return {
     title: f.title,
     description: f.description,
@@ -77,6 +116,14 @@ function fromForm(f: FormState): ItemInput | string {
       .filter(Boolean),
     notes: f.notes,
     images: f.images,
+    book: bookOrNull({
+      ...f.book,
+      isbn,
+      yearPublished: year,
+      format: f.book.format || null,
+      dustJacket: f.book.dustJacket === "" ? null : f.book.dustJacket === "yes",
+      rarity: f.book.rarity || null,
+    }),
   };
 }
 
@@ -96,6 +143,10 @@ export function ItemForm({
   const field = <K extends keyof FormState>(key: K) => ({
     value: form[key] as string,
     onChange: (e: { target: { value: string } }) => setForm((f) => ({ ...f, [key]: e.target.value })),
+  });
+  const bookField = <K extends keyof BookForm>(key: K) => ({
+    value: form.book[key] as string,
+    onChange: (e: { target: { value: string } }) => setForm((f) => ({ ...f, book: { ...f.book, [key]: e.target.value } })),
   });
 
   async function submit(e: FormEvent) {
@@ -163,6 +214,83 @@ export function ItemForm({
             <input placeholder="comma, separated" {...field("tags")} />
           </label>
         </div>
+      </section>
+
+      <section className="card">
+        <h2>Book details</h2>
+        <p className="muted small form-hint">For books. Leave empty for anything else.</p>
+        <div className="grid-3">
+          <label>
+            Author
+            <input maxLength={200} {...bookField("author")} />
+          </label>
+          <label>
+            ISBN
+            <input maxLength={20} inputMode="numeric" placeholder="10 or 13 digits" {...bookField("isbn")} />
+          </label>
+          <label>
+            Publisher
+            <input maxLength={120} {...bookField("publisher")} />
+          </label>
+          <label>
+            Year published
+            <input inputMode="numeric" maxLength={4} {...bookField("yearPublished")} />
+          </label>
+          <label>
+            Edition
+            <input maxLength={120} placeholder="e.g. First edition" {...bookField("edition")} />
+          </label>
+          <label>
+            Printing
+            <input maxLength={120} placeholder="e.g. First printing" {...bookField("printing")} />
+          </label>
+          <label>
+            Format
+            <select {...bookField("format")}>
+              <option value="">—</option>
+              {BOOK_FORMATS.map((b) => (
+                <option key={b} value={b}>
+                  {BOOK_FORMAT_LABELS[b]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Language
+            <input maxLength={40} {...bookField("language")} />
+          </label>
+          <label>
+            Rarity
+            <select {...bookField("rarity")}>
+              <option value="">—</option>
+              {RARITIES.map((r) => (
+                <option key={r} value={r}>
+                  {RARITY_LABELS[r]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Dust jacket
+            <select {...bookField("dustJacket")}>
+              <option value="">—</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={form.book.signed}
+              onChange={(e) => setForm((f) => ({ ...f, book: { ...f.book, signed: e.target.checked } }))}
+            />
+            Signed copy
+          </label>
+        </div>
+        <label>
+          Rarity notes
+          <textarea rows={2} maxLength={1000} placeholder="Points of issue, number line, provenance…" {...bookField("rarityNotes")} />
+        </label>
       </section>
 
       <section className="card">
