@@ -23,10 +23,14 @@ pnpm typecheck
 ### Extension
 
 ```bash
-pnpm build:ext    # → apps/extension/dist (talks to http://localhost:8787 by default)
+pnpm build:ext       # → apps/extension/dist       "Jewel Finder (dev)", talks to http://localhost:8787
+pnpm build:ext:prod  # → apps/extension/dist-prod  "Jewel Finder", talks to the deployed Worker
 ```
 
-Load `apps/extension/dist` via **chrome://extensions → Developer mode → Load unpacked**. Click the
+Accounts live on one server, so sign in with the build that matches where you signed up. The side
+panel's login screen shows which server it uses. The two builds can be loaded side by side.
+
+Load the folder via **chrome://extensions → Developer mode → Load unpacked**. Click the
 toolbar icon to open the side panel. Use `pnpm --filter @jf/extension watch` while developing it
 (reload the extension after background changes).
 
@@ -75,5 +79,5 @@ cd ../..
 cp .env.sentry.example .env.sentry      # optional: Sentry auth token + web DSN
 pnpm run deploy -- --dry-run            # check: builds everything, uploads/deploys nothing
 pnpm run deploy                         # web build → Worker bundle → source maps → wrangler deploy
-API_URL=https://jewel-finder.<you>.workers.dev pnpm build:ext
+pnpm build:ext:prod  # or API_URL=https://… pnpm build:ext for another deployment
 ```

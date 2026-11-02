@@ -1,13 +1,20 @@
-// Builds the extension into dist/. Content scripts must be classic scripts (IIFE);
+// Builds the extension. Content scripts must be classic scripts (IIFE);
 // the background service worker is an ES module.
 //
-//   API_URL=https://jewel-finder.example.workers.dev node build.mjs
+//   node build.mjs          → dist/       "Jewel Finder (dev)", talks to http://localhost:8787
+//   node build.mjs --prod   → dist-prod/  "Jewel Finder", talks to the deployed Worker
+//   API_URL=https://… node build.mjs      → dist-prod/ for any other deployment
+//
+// The two builds match different hosts, so both can be loaded in Chrome side by side.
 import * as esbuild from "esbuild";
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 const watch = process.argv.includes("--watch");
-const API_URL = (process.env.API_URL ?? "http://localhost:8787").replace(/\/$/, "");
+const PROD_API_URL = "https://jewel-finder.tayfun-sen.workers.dev";
+const API_URL = (process.env.API_URL ?? (process.argv.includes("--prod") ? PROD_API_URL : "http://localhost:8787")).replace(/\/$/, "");
 const apiOrigin = new URL(API_URL);
+const dev = ["localhost", "127.0.0.1"].includes(apiOrigin.hostname);
+const outdir = dev ? "dist" : "dist-prod";
 // Chrome match patterns ignore ports, so this also covers the Vite dev server on :5173.
 const appPattern = `${apiOrigin.protocol}//${apiOrigin.hostname}/*`;
 
@@ -17,7 +24,7 @@ const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 
 const manifest = {
   manifest_version: 3,
-  name: "Jewel Finder",
+  name: dev ? "Jewel Finder (dev)" : "Jewel Finder",
   description: "List your Jewel Finder inventory on Vinted and eBay.",
   version: pkg.version ?? "0.1.0",
   minimum_chrome_version: "116",
@@ -34,12 +41,12 @@ const manifest = {
   ],
 };
 
-rmSync("dist", { recursive: true, force: true });
-mkdirSync("dist", { recursive: true });
-writeFileSync("dist/manifest.json", JSON.stringify(manifest, null, 2));
-cpSync("src/sidepanel/sidepanel.html", "dist/sidepanel.html");
-cpSync("src/sidepanel/sidepanel.css", "dist/sidepanel.css");
-cpSync("icons", "dist/icons", { recursive: true });
+rmSync(outdir, { recursive: true, force: true });
+mkdirSync(outdir, { recursive: true });
+writeFileSync(`${outdir}/manifest.json`, JSON.stringify(manifest, null, 2));
+cpSync("src/sidepanel/sidepanel.html", `${outdir}/sidepanel.html`);
+cpSync("src/sidepanel/sidepanel.css", `${outdir}/sidepanel.css`);
+cpSync("icons", `${outdir}/icons`, { recursive: true });
 
 const common = {
   bundle: true,
@@ -51,7 +58,7 @@ const common = {
 };
 
 const builds = [
-  { ...common, entryPoints: { background: "src/background.ts" }, format: "esm", outdir: "dist" },
+  { ...common, entryPoints: { background: "src/background.ts" }, format: "esm", outdir },
   {
     ...common,
     entryPoints: {
@@ -61,14 +68,14 @@ const builds = [
       sidepanel: "src/sidepanel/sidepanel.ts",
     },
     format: "iife",
-    outdir: "dist",
+    outdir,
   },
 ];
 
 if (watch) {
   for (const b of builds) await (await esbuild.context(b)).watch();
-  console.log(`Watching… (API_URL=${API_URL})`);
+  console.log(`Watching ${outdir}/ (API_URL=${API_URL})`);
 } else {
   await Promise.all(builds.map((b) => esbuild.build(b)));
-  console.log(`Built dist/ for API_URL=${API_URL}`);
+  console.log(`Built ${outdir}/ for API_URL=${API_URL}`);
 }

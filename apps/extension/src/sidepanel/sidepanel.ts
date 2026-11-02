@@ -102,6 +102,8 @@ function renderLogin() {
     error ? h("p", { class: "error" }, error) : null,
     submit,
     h("p", { class: "muted" }, "No account? ", h("a", { href: `${API_URL}/signup`, target: "_blank" }, "Create one")),
+    // Accounts live on one server; make it obvious which one this build signs in to.
+    h("p", { class: "muted small" }, `Signing in to ${new URL(API_URL).host}`),
   );
   app.replaceChildren(form);
   email.focus();

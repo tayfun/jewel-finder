@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-prod/
 .wrangler/
 .dev.vars
 *.log

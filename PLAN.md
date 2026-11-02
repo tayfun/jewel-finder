@@ -127,7 +127,7 @@ pnpm test
 
 Deploy: `pnpm run deploy` (builds the web app, then `wrangler deploy` with it as static assets).
 Set the secret first: `wrangler secret put JWT_SECRET`. Build the extension against production
-with `API_URL=https://<your-worker>.workers.dev pnpm build:ext`.
+with `pnpm build:ext:prod` (→ `dist-prod/`; `API_URL=… pnpm build:ext` for another deployment).
 
 ## 7. Product roadmap (promised on the landing page, not built yet)
 
