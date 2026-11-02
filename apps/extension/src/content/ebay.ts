@@ -21,28 +21,70 @@ function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-/** eBay's description is usually a rich-text editor in a same-origin iframe. */
-function fillDescription(text: string): boolean {
-  const textarea = findField(FIELDS.description);
-  if (textarea) {
-    setValue(textarea, text);
-    return true;
-  }
-  for (const frame of document.querySelectorAll("iframe")) {
-    let body: HTMLElement | null = null;
+/** True unless the element sits inside something eBay hides with its `hidden` class or attribute. */
+const shown = (el: Element) => !el.closest(".hidden, [hidden]");
+
+/** The body of the rich-text editor iframe, once eBay has switched it into edit mode. */
+function editorBody(): HTMLElement | null {
+  const frames = [
+    ...document.querySelectorAll<HTMLIFrameElement>('iframe[title*="escription" i], iframe[id^="se-rte-frame"]'),
+    ...document.querySelectorAll<HTMLIFrameElement>("iframe"),
+  ];
+  for (const frame of frames) {
+    let doc: Document | null = null;
     try {
-      body = frame.contentDocument?.body ?? null;
+      doc = frame.contentDocument;
     } catch {
       continue; // cross-origin
     }
-    if (!body?.isContentEditable && body?.getAttribute("contenteditable") !== "true") continue;
-    body.innerHTML = text.split("\n").map((line) => escapeHtml(line) || "<br>").map((l) => `<div>${l}</div>`).join("");
-    body.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const body = doc?.body;
+    if (doc && body && (doc.designMode === "on" || body.isContentEditable || body.getAttribute("contenteditable") === "true")) return body;
+  }
+  return null;
+}
+
+/**
+ * eBay's description is a rich-text editor in a same-origin iframe. Next to it sits a hidden
+ * <textarea name="description"> used only in "Show HTML code" mode; writing there alone does nothing.
+ */
+async function fillDescription(text: string): Promise<boolean> {
+  const html = text.split("\n").map((line) => `<div>${escapeHtml(line) || "<br>"}</div>`).join("");
+  const textarea = findField(FIELDS.description);
+  if (textarea && shown(textarea)) {
+    setValue(textarea, text);
     return true;
   }
+
+  const body = textarea || document.querySelector("iframe") ? await waitFor(editorBody, 5000) : null;
+  if (body) {
+    const doc = body.ownerDocument;
+    body.focus();
+    doc.getSelection()?.selectAllChildren(body);
+    // execCommand goes through the editor's own input handling, so eBay's model sees the change.
+    let inserted = false;
+    try {
+      inserted = doc.execCommand("insertHTML", false, html);
+    } catch {
+      // not supported here
+    }
+    // Line breaks become separate <div>s, so compare without whitespace.
+    const squash = (s: string | null) => (s ?? "").replace(/\s+/g, "");
+    if (!inserted || squash(body.textContent) !== squash(text)) {
+      body.innerHTML = html;
+      body.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertFromPaste" }));
+    }
+    // Keep the HTML-mode copy in step in case eBay submits that one.
+    if (textarea) setValue(textarea, html);
+    return true;
+  }
+
   const editable = document.querySelector<HTMLElement>('[contenteditable="true"][aria-label*="escription" i]');
   if (editable) {
     setValue(editable, text);
+    return true;
+  }
+  if (textarea) {
+    setValue(textarea, text);
     return true;
   }
   return false;
@@ -111,7 +153,7 @@ export const ebay: Adapter = {
     if (item.condition) report.manual.push({ field: "Condition (check)", value: EBAY_CONDITION_LABELS[item.condition] });
 
     if (item.description) {
-      if (fillDescription(item.description)) report.filled.push("Description");
+      if (await fillDescription(item.description)) report.filled.push("Description");
       else report.manual.push({ field: "Description", value: item.description });
     }
 

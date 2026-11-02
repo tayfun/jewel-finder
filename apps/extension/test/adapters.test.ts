@@ -97,4 +97,25 @@ describe("ebay adapter", () => {
     expect(report.filled).toEqual(["1 photo", "Title", "Brand", "Description", "Price"]);
     expect(report.manual.map((m) => m.field)).toEqual(["Size", "Colour", "Condition (check)", "Postage"]);
   }, 15_000);
+
+  it("writes the description into the rich-text iframe, not the hidden HTML textarea", async () => {
+    // Shape of eBay's form: the visible editor is an iframe; the textarea is only for "Show HTML code".
+    document.body.innerHTML = `
+      <input name="title">
+      <div class="se-rte__button-group-editor">
+        <div class="iframe-wrapper"><iframe id="se-rte-frame__summary" title="Description"></iframe></div>
+        <textarea class="se-rte__button-group-editor__html hidden" name="description"></textarea>
+      </div>
+      <input name="price">
+    `;
+    // happy-dom doesn't load iframe documents, so give the frame one the way eBay's editor sets it up.
+    const frameDoc = document.implementation.createHTMLDocument("");
+    frameDoc.designMode = "on";
+    Object.defineProperty(document.querySelector("iframe")!, "contentDocument", { value: frameDoc });
+
+    const report = await ebay.fill(ctx("ebay"), []);
+    expect(frameDoc.body.innerHTML).toBe("<div>Classic fit.</div><div>Worn twice.</div>");
+    expect(document.querySelector<HTMLTextAreaElement>('[name="description"]')!.value).toBe(frameDoc.body.innerHTML);
+    expect(report.filled).toContain("Description");
+  }, 15_000);
 });
