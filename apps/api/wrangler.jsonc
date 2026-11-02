@@ -1,20 +1,44 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "jewel-finder",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-10-01",
-  "compatibility_flags": ["nodejs_compat"],
-  // The built web app is served from the same Worker. /api and /images hit the Worker first.
-  "assets": {
-    "directory": "../web/dist",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/images/*"]
-  },
-  "durable_objects": {
-    "bindings": [{ "name": "ACCOUNT", "class_name": "AccountDO" }]
-  },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AccountDO"] }],
-  "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "jewel-finder-images" }],
-  "observability": { "enabled": true }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "jewel-finder",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	// The built web app is served from the same Worker. /api and /images hit the Worker first.
+	"assets": {
+		"directory": "../web/dist",
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*",
+			"/images/*"
+		]
+	},
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "ACCOUNT",
+				"class_name": "AccountDO"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"AccountDO"
+			]
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "IMAGES",
+			"bucket_name": "jewel-finder-images"
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
 }

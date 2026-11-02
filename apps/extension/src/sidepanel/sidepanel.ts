@@ -101,7 +101,7 @@ function renderLogin() {
     h("label", {}, "Password", password),
     error ? h("p", { class: "error" }, error) : null,
     submit,
-    h("p", { class: "muted" }, "No account? ", h("a", { href: API_URL, target: "_blank" }, "Create one")),
+    h("p", { class: "muted" }, "No account? ", h("a", { href: `${API_URL}/signup`, target: "_blank" }, "Create one")),
   );
   app.replaceChildren(form);
   email.focus();

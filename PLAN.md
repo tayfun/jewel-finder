@@ -94,14 +94,14 @@ Selectors live in one adapter file per marketplace with multiple fallback strate
 Status (2026-11-02): steps 1–5 are implemented. Tests: shared 6, API 7 (in workerd), extension 12
 (happy-dom, incl. a real React-controlled form). The web app was exercised end to end in a browser.
 **Not yet verified against the live Vinted/eBay sites** — the content-script selectors are
-best-effort and need checking with a real seller account (see section 8).
+best-effort and need checking with a real seller account (see section 9).
 
 1. **Scaffold** — pnpm workspace, root tsconfig, `packages/shared` (zod schemas, types, money
    helpers, marketplace constants & URL builders).
 2. **Backend** — Worker + Hono routes, `AccountDO` with SQLite migrations and RPC methods, JWT +
    PBKDF2 auth, R2 image upload/serve, CORS for the extension, static-asset fallback to the SPA.
    Tests with `@cloudflare/vitest-pool-workers`.
-3. **Web app** — Vite + React + React Router: login/register, inventory grid with search/filter,
+3. **Web app** — Vite + React + React Router: landing page, separate sign-in and sign-up pages, inventory grid with search/filter,
    dashboard stats, item create/edit with photo upload, item page with per-marketplace listing
    status and actions (list via extension, mark listed manually, mark sold, archive, delete,
    duplicate), settings page. Detects whether the extension is installed.
@@ -124,18 +124,42 @@ Deploy: `pnpm deploy` (builds the web app, then `wrangler deploy` with it as sta
 Set the secret first: `wrangler secret put JWT_SECRET`. Build the extension against production
 with `API_URL=https://<your-worker>.workers.dev pnpm build:ext`.
 
-## 7. Later / out of scope for v1
+## 7. Product roadmap (promised on the landing page, not built yet)
+
+**Import from platforms.** Bring a seller's existing Vinted and eBay listings into their inventory.
+- The extension reads the seller's own "my items" pages (Vinted member wardrobe, eBay Seller Hub
+  active listings) while they're signed in, opening each listing to collect title, description,
+  price, brand/size/condition and photo URLs.
+- Background worker downloads the photos, uploads them to R2 via `/api/images`, and creates items
+  through a new `POST /api/items/import` (batch). Each imported item gets a `listed` listing row
+  with its marketplace URL/id, so nothing is listed twice.
+- De-duplicate on `(marketplace, external_id)`; re-running an import only adds new listings.
+- Web app: "Import" button that hands off to the extension (same bridge as listing), with progress.
+
+**Relist & bump to the top.** Refresh stale listings without manual delete + recreate.
+- Vinted: "bump" is either Vinted's paid push or delete-and-relist; ours is the latter, automated:
+  the extension re-creates the listing from inventory data (photos, fields) and then deletes the old one.
+- eBay: use the native "Sell similar" / relist flow for ended items, and end-and-relist for stale active ones.
+- Track `listed_at` / `relisted_count` per listing; show "stale for N days" and a "Relist" action,
+  plus a bulk "relist everything older than N days".
+
+**Find the treasure.** Help users spot underpriced items to buy and resell.
+- Saved searches on Vinted/eBay run by the extension in the user's browser, flagging listings below
+  a price threshold or below the user's own sold prices for similar items.
+- "Save to inventory" from a marketplace item page (prefilled draft with cost = purchase price).
+
+## 8. Later / out of scope for v1
 
 - Cross-delisting: when an item sells on one marketplace, open the others and end the listing.
-- Importing existing listings from Vinted/eBay (scrape "my items" pages via the extension).
 - Bulk actions, CSV import/export, multi-quantity stock with per-sale tracking, profit reports.
 - Email verification, password reset, email change (needs an email→account index).
 - Image editing (crop/rotate/background removal), signed/private image URLs.
 - Category/size mapping tables per marketplace for fuller auto-fill.
 
-## 8. Next up
+## 9. Next up
 
 1. Load the extension against live Vinted and eBay with a seller account; adjust selectors in
    `apps/extension/src/content/{vinted,ebay}.ts` and add fixtures captured from the real pages to the tests.
 2. Rate-limit `/api/auth/*` (Workers Rate Limiting binding).
-3. Cross-delisting when an item sells (section 7).
+3. Cross-delisting when an item sells (section 8).
+4. Imports, then relist/bump (section 7).

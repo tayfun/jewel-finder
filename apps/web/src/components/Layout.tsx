@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { NavLink, Navigate, Outlet, useLocation } from "react-router";
 import { useAuth } from "../auth";
 
@@ -9,7 +10,8 @@ export function RequireAuth() {
   return <Layout />;
 }
 
-function Layout() {
+/** The signed-in app chrome. Renders `children` when given, otherwise the matched child route. */
+export function Layout({ children }: { children?: ReactNode }) {
   const { account } = useAuth();
   return (
     <div className="app">
@@ -28,7 +30,7 @@ function Layout() {
         <span className="muted small hide-sm">{account?.email}</span>
       </header>
       <main className="container">
-        <Outlet />
+        {children ?? <Outlet />}
       </main>
     </div>
   );

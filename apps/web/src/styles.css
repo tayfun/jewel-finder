@@ -133,11 +133,73 @@ label input, label select, label textarea { font-weight: 400; }
 .form-actions { display: flex; justify-content: flex-end; align-items: center; gap: 1rem; }
 .inline-form { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
 
-/* ----- auth */
-.auth-page { min-height: 100vh; display: grid; place-items: center; padding: 1rem; }
-.auth-card { width: 100%; max-width: 380px; padding: 2rem; }
-.auth-card > p { text-align: center; margin-top: 0; }
-.auth-card .primary { width: 100%; margin-top: 0.4rem; }
+/* ----- buttons used on public pages */
+.button.big, button.big { padding: 0.75rem 1.3rem; font-size: 1rem; }
+.button.ghost { background: transparent; border-color: transparent; }
+.button.ghost:hover { background: var(--surface-2); }
+
+/* ----- sign in: compact, centred */
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 1rem; }
+.login-card { width: 100%; max-width: 360px; padding: 2rem; }
+.login-card h1 { margin-top: 1.4rem; }
+.login-card > p.muted { margin: 0 0 1.2rem; }
+.login-card .primary { width: 100%; margin-top: 0.4rem; }
+
+/* ----- sign up: split screen with a pitch panel */
+.signup-page { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.signup-pitch {
+  display: flex; flex-direction: column; justify-content: space-between; gap: 2rem;
+  padding: 2.5rem 3rem; color: #f0fdfa;
+  background: radial-gradient(circle at 20% 15%, #14b8a6 0, transparent 45%), linear-gradient(160deg, #0f766e, #134e4a);
+}
+.signup-pitch .brand { color: #fff; }
+.signup-pitch h1 { font-size: 2.4rem; line-height: 1.15; margin-bottom: 1rem; }
+.signup-pitch p { font-size: 1.1rem; opacity: 0.9; max-width: 30rem; }
+.checklist { list-style: none; padding: 0; margin: 1.6rem 0 0; display: grid; gap: 0.7rem; }
+.checklist li::before { content: "✓"; display: inline-grid; place-items: center; width: 1.4rem; height: 1.4rem; margin-right: 0.6rem; border-radius: 50%; background: rgb(255 255 255 / 18%); font-size: 0.8rem; font-weight: 700; }
+.signup-pitch > .small { opacity: 0.75; }
+.signup-main { display: grid; place-items: center; padding: 2rem 1.5rem; background: var(--surface); }
+.signup-form { width: 100%; max-width: 380px; }
+.signup-form h2 { font-size: 1.5rem; margin-bottom: 1.4rem; }
+.signup-form .primary { width: 100%; margin-top: 0.4rem; }
+
+/* ----- landing */
+.landing { max-width: 1140px; margin: 0 auto; padding: 0 1.5rem; }
+.landing-nav { display: flex; align-items: center; gap: 2rem; padding: 1.1rem 0; }
+.landing-nav nav { display: flex; gap: 1.5rem; flex: 1; }
+.landing-nav nav a { color: var(--muted); }
+.landing-nav nav a:hover { color: var(--text); text-decoration: none; }
+.landing-nav .actions { margin-left: auto; }
+.hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 3rem; align-items: center; padding: 4.5rem 0 5rem; }
+.eyebrow { display: inline-block; font-size: 0.8rem; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 0.25rem 0.7rem; border-radius: 99px; margin-bottom: 1.2rem; }
+.hero h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); line-height: 1.08; letter-spacing: -0.025em; margin: 0 0 1.2rem; }
+.accent { color: var(--accent); }
+.lead { font-size: 1.15rem; color: var(--muted); max-width: 36rem; margin: 0 0 1.8rem; }
+.hero .actions { margin-bottom: 0.9rem; }
+.hero-visual { position: relative; height: 380px; }
+.mock-card { position: absolute; top: 20px; left: 50%; width: 260px; transform: translateX(-50%) rotate(-2deg); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 20px 45px rgb(16 24 40 / 16%); }
+.mock-card.back { height: 320px; transform: translateX(-38%) rotate(6deg); opacity: 0.55; }
+.mock-photo { height: 190px; display: grid; place-items: center; font-size: 4.5rem; background: linear-gradient(135deg, #dbeafe, #ccfbf1); }
+.mock-body { padding: 0.9rem 1rem 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.mock-row { display: flex; justify-content: space-between; align-items: baseline; }
+.mock-toast { position: absolute; bottom: 10px; left: 0; display: flex; gap: 0.5rem; align-items: center; padding: 0.7rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 12px 30px rgb(16 24 40 / 14%); font-weight: 600; font-size: 0.9rem; }
+.landing-section { padding: 4rem 0; border-top: 1px solid var(--border); }
+.section-title { font-size: 1.8rem; letter-spacing: -0.015em; text-align: center; margin: 0 0 2.5rem; }
+.feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.2rem; }
+.feature { padding: 1.4rem; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+.feature h3 { font-size: 1.05rem; margin: 0.8rem 0 0.4rem; }
+.feature p { margin: 0; }
+.feature-icon { display: inline-grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: 10px; background: var(--accent-soft); font-size: 1.3rem; }
+.steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; }
+.steps h3 { font-size: 1.05rem; margin: 0.9rem 0 0.4rem; }
+.steps p { margin: 0; }
+.step-num { display: inline-grid; place-items: center; width: 2.2rem; height: 2.2rem; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; }
+.cta-band { margin: 2rem 0 3rem; padding: 3.5rem 2rem; text-align: center; border-radius: 20px; color: #f0fdfa; background: linear-gradient(135deg, #0f766e, #134e4a); }
+.cta-band h2 { font-size: 1.9rem; margin-bottom: 0.6rem; }
+.cta-band p { opacity: 0.9; margin: 0 0 1.6rem; }
+.cta-band .primary { background: #fff; border-color: #fff; color: #0f766e; }
+.cta-band .primary:hover { background: #f0fdfa; }
+.landing-footer { display: flex; justify-content: space-between; padding: 1.5rem 0 2.5rem; border-top: 1px solid var(--border); }
 
 /* ----- inventory */
 .stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.75rem; margin-bottom: 1.2rem; }
@@ -165,6 +227,8 @@ label input, label select, label textarea { font-weight: 400; }
 .listing-badges { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 .status-in_stock { background: var(--accent-soft); color: var(--accent); }
 .status-sold { background: var(--warn-soft); }
+/* Brand names keep their own casing ("eBay", not "EBay"). */
+.mk-vinted, .mk-ebay { text-transform: none; }
 .mk-vinted { color: #fff; background: var(--vinted); }
 .mk-ebay { color: #fff; background: var(--ebay); }
 .mk-vinted.ls-pending, .mk-ebay.ls-pending { opacity: 0.6; }
@@ -209,6 +273,11 @@ label input, label select, label textarea { font-weight: 400; }
 
 @media (max-width: 900px) {
   .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hero { grid-template-columns: 1fr; padding-top: 2.5rem; }
+  .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .signup-page { grid-template-columns: 1fr; }
+  .signup-pitch { padding: 2rem 1.5rem; }
+  .signup-pitch h1 { font-size: 1.9rem; }
   .detail, .grid-2 { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
@@ -218,4 +287,8 @@ label input, label select, label textarea { font-weight: 400; }
   .grid-3 { grid-template-columns: 1fr; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .item-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+  .landing { padding: 0 1rem; }
+  .landing-nav { gap: 0.5rem; }
+  .hero-visual { display: none; }
+  .feature-grid, .steps { grid-template-columns: 1fr; }
 }
