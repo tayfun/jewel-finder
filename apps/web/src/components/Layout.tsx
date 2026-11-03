@@ -26,6 +26,7 @@ export function Layout({ children }: { children?: ReactNode }) {
             Inventory
           </NavLink>
           <NavLink to="/items/new">Add item</NavLink>
+          <NavLink to="/import">Import</NavLink>
           <NavLink to="/settings">Settings</NavLink>
         </nav>
         <div className="topbar-end">

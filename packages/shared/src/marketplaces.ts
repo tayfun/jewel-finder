@@ -132,3 +132,42 @@ export function parseListingUrl(
 export function imageUrl(apiBase: string, key: string): string {
   return `${apiBase.replace(/\/$/, "")}/images/${key}`;
 }
+
+/**
+ * Where the seller's own listings are, for importing. Vinted's wardrobe URL needs the member id,
+ * so we open the home page and the extension follows the profile link from there.
+ */
+export function myListingsUrl(marketplace: Marketplace, settings: Settings): string {
+  if (marketplace === "vinted") return `https://${settings.vintedDomain}/`;
+  return `https://${settings.ebayDomain}/sh/lst/active`;
+}
+
+/**
+ * Our condition for a marketplace's condition text (Vinted's scale, eBay's names, or a schema.org
+ * itemCondition URL). Null when it can't tell, e.g. a bare "Used".
+ */
+export function conditionFromText(text: string | null | undefined): Condition | null {
+  const s = (text ?? "").toLowerCase().replace(/^https?:\/\/schema\.org\//, "").replace(/[\s_-]+/g, " ").trim();
+  if (!s) return null;
+  if (/new with (tags|box)|brand new with/.test(s)) return "new_with_tags";
+  if (/new without (tags|box)|new with defects|new other|^(brand )?new( condition)?$|^newcondition$/.test(s)) return "new_without_tags";
+  if (/excellent|very good|like new|as new|refurbished/.test(s)) return "very_good";
+  if (/satisfactory|fair|acceptable|for parts/.test(s)) return "satisfactory";
+  if (/good/.test(s)) return "good";
+  return null;
+}
+
+/** A price as a marketplace writes it ("£12.50", "12,50 €", "1.234,00", 12.5) → minor units. */
+export function priceToMinor(input: string | number | null | undefined): number | null {
+  if (input == null) return null;
+  if (typeof input === "number") return Number.isFinite(input) && input >= 0 ? Math.round(input * 100) : null;
+  const m = input.replace(/\s/g, "").match(/\d[\d.,]*/);
+  if (!m) return null;
+  let s = m[0].replace(/[.,]$/, "");
+  // The last separator followed by 1–2 digits is the decimal point; the rest group thousands.
+  const dec = s.match(/[.,](\d{1,2})$/);
+  const whole = (dec ? s.slice(0, -dec[0].length) : s).replace(/[.,]/g, "");
+  s = dec ? `${whole}.${dec[1]}` : whole;
+  const n = Number(s);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+}

@@ -1,7 +1,18 @@
-import { MARKETPLACE_LABELS, imageUrl, sellUrl, type Account, type AuthResponse, type ItemWithListings } from "@jf/shared";
+import {
+  MARKETPLACE_LABELS,
+  imageUrl,
+  myListingsUrl,
+  sellUrl,
+  type Account,
+  type AuthResponse,
+  type ImportResult,
+  type ItemWithListings,
+  type Listing,
+} from "@jf/shared";
 import { API_URL } from "./config";
 import { api, getAuth, setAuth, tokenSubject } from "./lib/api";
-import type { ImageFile, Job, Reply, Request, Responses } from "./messages";
+import { isDescriptionHost, isPhotoHost, toImportListing } from "./lib/import-item";
+import type { ImageFile, ImportJob, Job, Reply, Request, Responses, TabMessage } from "./messages";
 
 chrome.runtime.onInstalled.addListener(() => {
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -23,7 +34,23 @@ async function setJob(tabId: number, job: Job | null) {
   await chrome.storage.session.set({ jobs });
 }
 
-chrome.tabs.onRemoved.addListener((tabId) => void setJob(tabId, null));
+// Import mode is kept per tab apart from listing jobs: it has no item, and it outlives page navigation
+// so the seller can page through their listings.
+async function getImports(): Promise<Record<string, ImportJob>> {
+  const { imports } = await chrome.storage.session.get("imports");
+  return (imports as Record<string, ImportJob> | undefined) ?? {};
+}
+
+async function setImport(tabId: number, job: ImportJob | null) {
+  const imports = await getImports();
+  if (job) imports[tabId] = job;
+  else delete imports[tabId];
+  await chrome.storage.session.set({ imports });
+}
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void setJob(tabId, null).then(() => setImport(tabId, null));
+});
 
 function tabOf(sender: chrome.runtime.MessageSender): number {
   const id = sender.tab?.id;
@@ -50,6 +77,24 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
     binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   }
   return `data:${blob.type};base64,${btoa(binary)}`;
+}
+
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+
+/** Downloads a listing photo from the marketplace's CDN and stores it in Jewel Finder. */
+async function copyPhoto(url: string): Promise<string> {
+  if (!isPhotoHost(url)) throw new Error(`Not a marketplace photo: ${url}`);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Photo download failed (${res.status})`);
+  const blob = await res.blob();
+  // Some CDNs send a generic type; the file extension tells us what it is.
+  const ext = new URL(url).pathname.match(/\.(jpe?g|png|webp|gif)$/i)?.[1]?.toLowerCase();
+  const fromExt = ext ? `image/${ext === "jpg" ? "jpeg" : ext}` : "";
+  const type = PHOTO_TYPES.includes(blob.type.split(";")[0]!.trim()) ? blob.type.split(";")[0]!.trim() : fromExt;
+  if (!PHOTO_TYPES.includes(type) || blob.size === 0 || blob.size > MAX_PHOTO_BYTES) throw new Error(`Unsupported photo (${type || "unknown type"})`);
+  const { key } = await api<{ key: string }>("/api/images", { body: new Blob([blob], { type }) });
+  return key;
 }
 
 // --------------------------------------------------------------- handlers
@@ -185,6 +230,70 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
       await api(`/api/items/${job.itemId}/listings/${job.marketplace}`, { method: "DELETE" });
     }
     return null;
+  },
+
+  // ---------------------------------------------------------------- imports
+
+  async START_IMPORT({ marketplace, tabId, token }) {
+    if (token) await adoptToken(token);
+    const auth = await getAuth();
+    if (!auth) throw new Error("Sign in to the Jewel Finder extension first");
+    const job: ImportJob = { marketplace, startedAt: Date.now() };
+    if (tabId != null) {
+      await setImport(tabId, job);
+      try {
+        await chrome.tabs.sendMessage(tabId, { type: "IMPORT_ACTIVATE" } satisfies TabMessage);
+      } catch {
+        await chrome.tabs.reload(tabId); // opened before the extension loaded: no content script yet
+      }
+      return { tabId };
+    }
+    const tab = await chrome.tabs.create({ url: myListingsUrl(marketplace, auth.account.settings) });
+    if (tab.id == null) throw new Error("Couldn't open a tab");
+    await setImport(tab.id, job);
+    return { tabId: tab.id };
+  },
+
+  async GET_IMPORT(_req, sender) {
+    const job = (await getImports())[tabOf(sender)];
+    const auth = await getAuth();
+    return job && auth ? { job, settings: auth.account.settings } : null;
+  },
+
+  async IMPORT_STOP(_req, sender) {
+    await setImport(tabOf(sender), null);
+    return null;
+  },
+
+  async IMPORT_KNOWN({ marketplace }) {
+    const { listings } = await api<{ listings: Listing[] }>(`/api/listings?marketplace=${marketplace}`);
+    return Object.fromEntries(listings.filter((l) => l.externalId).map((l) => [l.externalId!, l.itemId]));
+  },
+
+  async IMPORT_LISTING({ marketplace, listing }, sender) {
+    if (!(await getImports())[tabOf(sender)]) throw new Error("Import was stopped in this tab");
+    const images: string[] = [];
+    for (const url of listing.photos.slice(0, 20)) {
+      try {
+        images.push(await copyPhoto(url));
+      } catch (e) {
+        console.warn("Jewel Finder: skipped a photo", url, e);
+      }
+    }
+    const { results } = await api<ImportResult>("/api/items/import", {
+      json: { marketplace, listings: [toImportListing(marketplace, listing, images)] },
+    });
+    const result = results[0];
+    if (!result) throw new Error("Import failed");
+    return { itemId: result.itemId, created: result.created, photos: result.created ? images.length : 0 };
+  },
+
+  async FETCH_DESCRIPTION({ url }, sender) {
+    tabOf(sender);
+    if (!isDescriptionHost(url)) throw new Error("Not an eBay description");
+    const res = await fetch(url, { credentials: "omit" });
+    if (!res.ok) throw new Error(`Description download failed (${res.status})`);
+    return (await res.text()).slice(0, 1_000_000);
   },
 };
 

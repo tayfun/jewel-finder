@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { ebayPackageSize, isValidIsbn, parseListingUrl, sellUrl, vintedPackageSize } from "./marketplaces";
+import {
+  EBAY_CONDITION_LABELS,
+  conditionFromText,
+  ebayPackageSize,
+  isValidIsbn,
+  myListingsUrl,
+  parseListingUrl,
+  priceToMinor,
+  sellUrl,
+  vintedPackageSize,
+} from "./marketplaces";
 import { formatMoney, parseMoney, toDecimal } from "./money";
 import { BookDetails, ItemInput, Settings, type PackageSize } from "./schemas";
 
@@ -92,5 +102,43 @@ describe("package sizes", () => {
     expect(vintedPackageSize(item("small", 2600))).toBe("medium");
     expect(vintedPackageSize(item("medium", 6000))).toBe("large");
     expect(vintedPackageSize(item("large", 1000))).toBe("large");
+  });
+});
+
+describe("imports", () => {
+  it("maps marketplace condition text to ours", () => {
+    expect(conditionFromText("New with tags")).toBe("new_with_tags");
+    expect(conditionFromText("New without tags")).toBe("new_without_tags");
+    expect(conditionFromText("Brand New")).toBe("new_without_tags");
+    expect(conditionFromText("https://schema.org/NewCondition")).toBe("new_without_tags");
+    expect(conditionFromText("Very good")).toBe("very_good");
+    expect(conditionFromText("Pre-owned - Excellent")).toBe("very_good");
+    expect(conditionFromText("Pre-owned: Good")).toBe("good");
+    expect(conditionFromText("Good")).toBe("good");
+    expect(conditionFromText("Satisfactory")).toBe("satisfactory");
+    expect(conditionFromText("Pre-owned – Fair")).toBe("satisfactory");
+    // Round-trips our own eBay labels.
+    for (const [c, label] of Object.entries(EBAY_CONDITION_LABELS)) expect(conditionFromText(label)).toBe(c);
+    expect(conditionFromText("Used")).toBeNull();
+    expect(conditionFromText("https://schema.org/UsedCondition")).toBeNull();
+    expect(conditionFromText("")).toBeNull();
+  });
+
+  it("reads prices the way marketplaces write them", () => {
+    expect(priceToMinor("£12.50")).toBe(1250);
+    expect(priceToMinor("12,50 €")).toBe(1250);
+    expect(priceToMinor("1.234,00 €")).toBe(123400);
+    expect(priceToMinor("£1,234.5")).toBe(123450);
+    expect(priceToMinor("US $1,234")).toBe(123400);
+    expect(priceToMinor("15")).toBe(1500);
+    expect(priceToMinor(9.99)).toBe(999);
+    expect(priceToMinor("free")).toBeNull();
+    expect(priceToMinor(null)).toBeNull();
+  });
+
+  it("knows where the seller's listings are", () => {
+    const settings = { currency: "GBP", vintedDomain: "www.vinted.fr", ebayDomain: "www.ebay.de" } as const;
+    expect(myListingsUrl("vinted", settings)).toBe("https://www.vinted.fr/");
+    expect(myListingsUrl("ebay", settings)).toBe("https://www.ebay.de/sh/lst/active");
   });
 });

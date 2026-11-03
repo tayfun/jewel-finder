@@ -43,8 +43,19 @@ Cross-delisting: mark an item sold ("Sold on Vinted/eBay/elsewhere") → its oth
 "Needs ending" and the extension opens each one → it gets the delete/end step ready (Vinted: Delete;
 eBay: End listing with a reason) and you confirm → once the listing is gone it's marked ended.
 
-The marketplace selectors live in `apps/extension/src/content/{vinted,ebay}.ts`. Marketplaces change
-their DOM regularly — that's the first place to look when a field stops filling.
+Importing: "Import listings" in the web app (or "Import listings: ⬇ Vinted / ⬇ eBay" in the side panel)
+puts a marketplace tab into import mode and opens your listings there (Vinted: your wardrobe, reached
+via "Open my wardrobe" from the home page; eBay: Seller Hub → Active). A panel on the page lists every
+listing it finds, with a checkbox each and "Select all on this page"; ones already in your inventory
+are marked and skipped. Import mode stays on as you scroll or page through. For each pick the extension
+fetches the listing page and reads title, description, price, brand, size, colour, condition, category
+and photos (JSON-LD and meta tags first, then the page's markup; eBay's description comes from its
+`ebaydesc.com` frame). The background copies the photos into R2 and `POST /api/items/import` creates the
+item with a `listed` (or `sold`/`ended`) listing, de-duplicated on the marketplace's listing id.
+
+The marketplace selectors live in `apps/extension/src/content/{vinted,ebay}.ts` (import readers: `vintedImporter` /
+`ebayImporter`; shared page-reading helpers in `src/lib/scrape.ts`). Marketplaces change their DOM
+regularly — that's the first place to look when a field stops filling or an import comes in thin.
 
 ### AI auto-fill
 
@@ -99,8 +110,10 @@ To publish it:
 2. **New item** → upload the zip. Fill in the listing: description, category (Productivity), a 128×128 icon
    (`apps/extension/icons/128.png`), at least one 1280×800 screenshot, and a privacy policy URL.
 3. On the **Privacy** tab, explain each permission: `storage` (sign-in token), `sidePanel` (the UI),
-   `tabs` (opening Vinted/eBay sell pages), host access to the Worker (your inventory) and to Vinted/eBay
-   (filling in their listing forms). Declare that it handles authentication info and website content, and
+   `tabs` (opening Vinted/eBay sell pages), host access to the Worker (your inventory), to Vinted/eBay
+   (filling in their listing forms, reading the seller's listings to import), and to `*.vinted.net`,
+   `i.ebayimg.com` and `*.ebaydesc.com` (downloading the photos and eBay descriptions of listings the
+   seller imports). Declare that it handles authentication info and website content, and
    that nothing is sold or used for anything else.
 4. Submit for review (usually a few days). Choose **Unlisted** if only people with the link should find it.
 5. Once approved, set `VITE_EXTENSION_URL` in `apps/web/.env` to the listing URL and redeploy: the

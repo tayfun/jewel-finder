@@ -76,6 +76,8 @@ DELETE /api/items/:id                                      → 204
 POST   /api/items/:id/duplicate                            → item   (photos copied, quantity ≥ 1)
 POST   /api/items/:id/sold     {marketplace?}              → item   (marks other listings ended)
 POST   /api/items/:id/autofill                          → {suggestion} (Gemini, not saved)
+POST   /api/items/import       {marketplace, listings[≤50]} → {results: [{externalId, itemId, created}]}
+GET    /api/listings?marketplace=                          → {listings}  (what's already imported)
 PUT    /api/items/:id/listings/:marketplace  ListingInput  → listing (upsert)
 DELETE /api/items/:id/listings/:marketplace                → 204
 GET    /api/stats                                          → counts + stock value
@@ -108,13 +110,29 @@ GET    /images/:key                                        → image bytes (publ
    item page says it ended) and sets the listing to `ended`. "I've ended it" in the web app does the
    same by hand. The inventory page warns while any listing still needs ending.
 
+7. **Imports.** The web app (bridge `IMPORT_LISTINGS`) or the side panel puts a tab into import mode
+   (`imports` in `chrome.storage.session`, per tab, kept across navigation) and opens the seller's
+   listings: eBay Seller Hub → Active, or Vinted's home page, from which the panel links to the member's
+   own wardrobe (`/member/<id>`; Vinted's URL needs the id). The content script shows a picker panel:
+   every distinct listing link on the page becomes a row (thumbnail, title, price) with a checkbox,
+   "Select all on this page", and listings already in the inventory (`GET /api/listings`) marked and
+   locked. It warns when the page doesn't look like the seller's own (eBay: only `/sh/`, `/mye/`
+   count; Vinted: the header's profile link must match the wardrobe). Importing goes one listing at a
+   time, 600 ms apart: the content script fetches the listing page with the seller's cookies and parses
+   it (`DOMParser`, no scripts) — JSON-LD Product/BreadcrumbList, then meta tags, then test ids and
+   label/value pairs; eBay's description is fetched by the background from `*.ebaydesc.com`. The
+   background downloads photos from the CDNs (host permissions `*.vinted.net`, `i.ebayimg.com`),
+   uploads them, and calls `POST /api/items/import`, which creates item + listing in one transaction,
+   skipping (and deleting the photos of) any `(marketplace, external_id)` already there. Sold listings
+   come in as sold items; ended eBay listings as in-stock items with an ended listing.
+
 Selectors live in one adapter file per marketplace with multiple fallback strategies
 (test ids → names → label text → placeholders) because marketplace DOMs change without notice.
 
 ## 5. Implementation steps
 
 Status (2026-11-03): steps 1–5 are implemented and deployed, along with AI auto-fill, Sentry, package
-sizes, the extension install page and the privacy policy. Cross-delisting is built but not deployed. Tests: shared 10, API 16 (in workerd), extension 18
+sizes, the extension install page and the privacy policy. Cross-delisting and imports are built but not deployed. Tests: shared 13, API 18 (in workerd), extension 32
 (happy-dom, incl. a real React-controlled form). The web app was exercised end to end in a browser.
 Live marketplace checks so far: one eBay listing was tried with the production extension; the
 description fix was built from the real eBay form. Still unverified live: eBay's package size picker (only its summary button was
@@ -151,15 +169,7 @@ the Worker, uploads source maps to Sentry (when configured) and runs `wrangler d
 
 ## 7. Product roadmap (promised on the landing page, not built yet)
 
-**Import from platforms.** Bring a seller's existing Vinted and eBay listings into their inventory.
-- The extension reads the seller's own "my items" pages (Vinted member wardrobe, eBay Seller Hub
-  active listings) while they're signed in, opening each listing to collect title, description,
-  price, brand/size/condition and photo URLs.
-- Background worker downloads the photos, uploads them to R2 via `/api/images`, and creates items
-  through a new `POST /api/items/import` (batch). Each imported item gets a `listed` listing row
-  with its marketplace URL/id, so nothing is listed twice.
-- De-duplicate on `(marketplace, external_id)`; re-running an import only adds new listings.
-- Web app: "Import" button that hands off to the extension (same bridge as listing), with progress.
+(Imports are built: see section 4, step 7.)
 
 **Relist & bump to the top.** Refresh stale listings without manual delete + recreate.
 - Vinted: "bump" is either Vinted's paid push or delete-and-relist; ours is the latter, automated:
@@ -194,4 +204,9 @@ the Worker, uploads source maps to Sentry (when configured) and runs `wrangler d
    Delete button and dialog, and whether eBay's item page has "End listing" for the seller.
 3. Rate-limit `/api/auth/*` (Workers Rate Limiting binding).
 4. Self-serve account deletion (section 8).
-5. Imports, then relist/bump (section 7).
+5. **Imports, live check**: import a few real listings from a Vinted wardrobe and from Seller Hub. Save
+   a real item page from each as a fixture (`apps/extension/test/import.test.ts` uses approximations)
+   and check what JSON-LD actually carries (Vinted: all photos? condition?), whether Vinted's CDN serves
+   photos to the extension, and that Seller Hub's rows are picked up. Then: matching an eBay import to
+   an item already imported from Vinted (today it becomes a second item).
+6. Relist/bump (section 7).

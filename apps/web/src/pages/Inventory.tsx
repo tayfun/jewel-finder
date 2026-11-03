@@ -32,9 +32,14 @@ export function Inventory() {
     <>
       <div className="page-head">
         <h1>Inventory</h1>
-        <Link to="/items/new" className="button primary">
-          + Add item
-        </Link>
+        <div className="actions">
+          <Link to="/import" className="button">
+            ⬇ Import listings
+          </Link>
+          <Link to="/items/new" className="button primary">
+            + Add item
+          </Link>
+        </div>
       </div>
 
       {s && (
@@ -95,9 +100,14 @@ export function Inventory() {
           ) : (
             <>
               <p>Your inventory is empty.</p>
-              <Link to="/items/new" className="button primary">
-                Add your first item
-              </Link>
+              <div className="actions" style={{ justifyContent: "center" }}>
+                <Link to="/items/new" className="button primary">
+                  Add your first item
+                </Link>
+                <Link to="/import" className="button">
+                  Import from Vinted or eBay
+                </Link>
+              </div>
             </>
           )}
         </div>

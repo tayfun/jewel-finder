@@ -1,7 +1,9 @@
 import {
   CONDITION_LABELS,
   VINTED_PACKAGE_LABELS,
+  conditionFromText,
   parseListingUrl,
+  priceToMinor,
   toDecimal,
   vintedPackageSize,
   type VintedPackageSize,
@@ -20,7 +22,9 @@ import {
   waitFor,
   type FieldSpec,
 } from "../lib/dom";
-import { run, type Adapter } from "../lib/runner";
+import { runImport } from "../lib/importer";
+import { run, type Adapter, type Importer } from "../lib/runner";
+import { breadcrumbs, first, imgUrl, labelledValue, ldImages, ldOfType, ldText, meta, text, textOf, uniquePhotos } from "../lib/scrape";
 
 // Vinted's upload form (/items/new). Several strategies per field because the DOM changes without notice.
 export const FIELDS = {
@@ -73,10 +77,88 @@ function selectPackageSize(size: VintedPackageSize): boolean {
 }
 
 const listingOf = (ctx: JobContext) => ctx.item.listings.find((l) => l.marketplace === "vinted");
+
+/** The signed-in member's own profile link in Vinted's header, e.g. /member/123-name. */
+function ownProfileLink(doc: Document): HTMLAnchorElement | null {
+  for (const a of doc.querySelectorAll<HTMLAnchorElement>('header a[href*="/member/"], [data-testid*="header"] a[href*="/member/"], nav a[href*="/member/"]')) {
+    if (/^\/member\/\d+/.test(new URL(a.href, doc.baseURI).pathname)) return a;
+  }
+  return null;
+}
+
+const memberId = (path: string) => path.match(/^\/member\/(\d+)/)?.[1] ?? null;
+
+/** Vinted's details table: data-testid="item-attributes-<name>" rows, or a label next to its value. */
+function attribute(doc: Document, testId: string, label: RegExp): string {
+  const row = doc.querySelector(`[data-testid="item-attributes-${testId}"]`);
+  if (row) {
+    const value =
+      textOf(row, '[itemprop]', '[data-testid$="-value"]', ".details-list__item-value", '[class*="value"]') ||
+      text(row.lastElementChild);
+    if (value) return value;
+  }
+  return labelledValue(doc, label);
+}
+
+/** Vinted photo URLs look like https://images1.vinted.net/t/<photo>/<size>/<file>?s=…; one photo, many sizes. */
+const photoKey = (url: string) => url.match(/\/t\/([^/]+)\//)?.[1] ?? url.split("?")[0]!;
+
+export const vintedImporter: Importer = {
+  emptyHint: "Open your Vinted profile to see your listings here, then tick the ones to import.",
+
+  listingsLink(url, doc) {
+    const own = ownProfileLink(doc);
+    if (!own || memberId(url.pathname) === memberId(new URL(own.href, doc.baseURI).pathname)) return null;
+    return { href: own.href, label: "Open my wardrobe" };
+  },
+
+  isOwnListings(url, doc) {
+    const id = memberId(url.pathname);
+    if (!id) return false;
+    const own = ownProfileLink(doc);
+    if (own) return memberId(new URL(own.href, doc.baseURI).pathname) === id;
+    // Your own profile has an "Edit profile" link to settings.
+    return Boolean(doc.querySelector('a[href*="/settings/profile"]'));
+  },
+
+  async parse(doc, url) {
+    const ld = ldOfType(doc, "Product");
+    const offer = first(ld?.offers) as Record<string, unknown> | undefined;
+    const title =
+      ldText(ld?.name) || textOf(doc, '[data-testid="item-page-summary-plugin"] h1', '[itemprop="name"]', "h1") || meta(doc, "og:title").replace(/\s*[|-]\s*Vinted.*$/i, "");
+    const conditionText = attribute(doc, "status", /^(condition|état|zustand|estado|stato|stan)$/);
+    const availability = String(offer?.availability ?? "");
+    const statusText = textOf(doc, '[data-testid*="item-status"]', '[data-testid*="sold"]');
+    const photos = [
+      ...ldImages(ld?.image),
+      ...[...doc.querySelectorAll<HTMLImageElement>('[data-testid^="item-photo"] img, .item-photos img, .item-thumbnail img')]
+        .map((img) => imgUrl(img, url))
+        .filter((u): u is string => Boolean(u)),
+      meta(doc, "og:image"),
+    ].filter(Boolean);
+    return {
+      state: /soldout|outofstock/i.test(availability) || /^sold$/i.test(statusText) ? "sold" : "listed",
+      title,
+      description:
+        ldText(ld?.description) ||
+        textOf(doc, '[itemprop="description"]', '[data-testid="item-description"]', '[data-testid*="description"]') ||
+        meta(doc, "og:description", "description"),
+      price: priceToMinor(ldText(offer?.price) || meta(doc, "product:price:amount", "og:price:amount") || textOf(doc, '[data-testid*="item-price"]', '[itemprop="price"]')),
+      brand: ldText(ld?.brand) || attribute(doc, "brand", /^(brand|marque|marke|marca)$/),
+      size: attribute(doc, "size", /^(size|taille|größe|talla|taglia|rozmiar)$/),
+      colour: attribute(doc, "color", /^(colou?r|couleur|farbe)$/),
+      condition: conditionFromText(conditionText) ?? conditionFromText(ldText(offer?.itemCondition ?? ld?.itemCondition)),
+      category: breadcrumbs(doc, title, ['[data-testid*="breadcrumb"] a', 'nav[aria-label*="readcrumb" i] a', ".breadcrumbs a"]),
+      photos: uniquePhotos(photos, photoKey),
+    };
+  },
+};
 const DIALOG = '[role=dialog], dialog[open], [data-testid*="modal"]';
 
 export const vinted: Adapter = {
   marketplace: "vinted",
+
+  importer: vintedImporter,
 
   isSellPage: (url) => /^\/items\/new\/?$/.test(url.pathname),
 
@@ -182,4 +264,7 @@ export const vinted: Adapter = {
   },
 };
 
-if (typeof chrome !== "undefined" && chrome.runtime?.id) void run(vinted);
+if (typeof chrome !== "undefined" && chrome.runtime?.id) {
+  void run(vinted);
+  void runImport(vinted);
+}

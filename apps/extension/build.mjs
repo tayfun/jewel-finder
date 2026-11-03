@@ -25,7 +25,7 @@ const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const manifest = {
   manifest_version: 3,
   name: dev ? "Jewel Finder (dev)" : "Jewel Finder",
-  description: "List your Jewel Finder inventory on Vinted and eBay.",
+  description: "List your Jewel Finder inventory on Vinted and eBay, and import the listings you already have.",
   version: pkg.version ?? "0.1.0",
   minimum_chrome_version: "116",
   icons: { 16: "icons/16.png", 48: "icons/48.png", 128: "icons/128.png" },
@@ -33,7 +33,8 @@ const manifest = {
   side_panel: { default_path: "sidepanel.html" },
   background: { service_worker: "background.js", type: "module" },
   permissions: ["storage", "sidePanel", "tabs"],
-  host_permissions: [`${API_URL}/*`],
+  // The Worker (your inventory); for imports, Vinted's and eBay's photo CDNs and eBay's description frames.
+  host_permissions: [`${API_URL}/*`, "https://*.vinted.net/*", "https://i.ebayimg.com/*", "https://*.ebaydesc.com/*"],
   content_scripts: [
     { matches: VINTED.map((tld) => `https://www.vinted.${tld}/*`), js: ["vinted.js"], run_at: "document_idle" },
     { matches: EBAY.map((tld) => `https://www.ebay.${tld}/*`), js: ["ebay.js"], run_at: "document_idle", all_frames: false },

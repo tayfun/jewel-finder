@@ -1,8 +1,10 @@
 import {
   EBAY_CONDITION_LABELS,
   PACKAGE_SIZE_LABELS,
+  conditionFromText,
   ebayPackageSize,
   parseListingUrl,
+  priceToMinor,
   toDecimal,
   type PackageSize,
 } from "@jf/shared";
@@ -20,7 +22,22 @@ import {
   waitFor,
   type FieldSpec,
 } from "../lib/dom";
-import { run, type Adapter } from "../lib/runner";
+import { runImport } from "../lib/importer";
+import { run, type Adapter, type Importer } from "../lib/runner";
+import {
+  breadcrumbs,
+  first,
+  htmlToText,
+  imgUrl,
+  labelledValue,
+  ldImages,
+  ldOfType,
+  ldText,
+  meta,
+  text,
+  textOf,
+  uniquePhotos,
+} from "../lib/scrape";
 
 // eBay's listing form (/lstng?...). The step before it (/sl/prelist) picks the category and condition.
 export const FIELDS = {
@@ -157,8 +174,87 @@ async function fillSpecific(spec: FieldSpec, value: string): Promise<boolean> {
 const listingOf = (ctx: JobContext) => ctx.item.listings.find((l) => l.marketplace === "ebay");
 const ENDED = /(listing|item) (has been|was|is now) ended|you('ve| have) ended|ended successfully|this listing (has|was) ended|seller ended this listing/;
 
+/** Item specifics: "Brand" → "Levi's". eBay renders them as .ux-labels-values rows. */
+function specific(doc: Document, label: RegExp): string {
+  for (const row of doc.querySelectorAll(".ux-labels-values")) {
+    const name = text(row.querySelector(".ux-labels-values__labels")).replace(/:$/, "").toLowerCase();
+    if (label.test(name)) return text(row.querySelector(".ux-labels-values__values"));
+  }
+  return labelledValue(doc, label);
+}
+
+/** eBay photo URLs: https://i.ebayimg.com/images/g/<photo>/s-l500.jpg. Ask for the largest size. */
+const fullSize = (url: string) => url.replace(/\/s-l\d+(\.\w+)(\?.*)?$/, "/s-l1600$1");
+const photoKey = (url: string) => url.match(/\/g\/([^/]+)\//)?.[1] ?? url.match(/\/z\/([^/]+)\//)?.[1] ?? url;
+
+const SOLD = /this (listing|item) (sold|was sold|has sold) on|(item|listing) sold on/;
+const IMPORT_ENDED = /(this listing|bidding) (has |was )?ended|seller ended this listing|no longer available/;
+
+/** The description lives in an iframe on another origin; fetch it via the background. */
+async function description(doc: Document, id: string, io: { fetchText(url: string): Promise<string> }): Promise<string> {
+  const frame = doc.querySelector<HTMLIFrameElement>('#desc_ifr, iframe[src*="ebaydesc"]');
+  const src = frame?.getAttribute("src") || `https://vi.vipr.ebaydesc.com/ws/eBayISAPI.dll?ViewItemDescV4&item=${id}`;
+  try {
+    const page = new DOMParser().parseFromString(await io.fetchText(new URL(src, "https://www.ebay.com").href), "text/html");
+    const root = page.querySelector(".x-item-description-child, #ds_div") ?? page.body;
+    return root ? htmlToText(root) : "";
+  } catch {
+    return "";
+  }
+}
+
+export const ebayImporter: Importer = {
+  emptyHint: "Open your active listings in Seller Hub (or My eBay → Selling) to see them here, then tick the ones to import.",
+
+  listingsLink: (url) => (url.pathname.startsWith("/sh/lst") ? null : { href: "/sh/lst/active", label: "Open my active listings" }),
+
+  // Seller Hub and My eBay only ever show your own listings; shops and searches could be anyone's.
+  isOwnListings: (url) => /^\/(sh|mye)\//.test(url.pathname),
+
+  async parse(doc, url, io) {
+    const id = parseListingUrl("ebay", url)?.externalId ?? "";
+    const ld = ldOfType(doc, "Product");
+    const offer = first(ld?.offers) as Record<string, unknown> | undefined;
+    const title =
+      textOf(doc, "h1.x-item-title__mainTitle", '[data-testid="x-item-title"] h1', "h1#itemTitle", "h1") ||
+      ldText(ld?.name) ||
+      meta(doc, "og:title").replace(/\s*\|\s*eBay.*$/i, "");
+    const conditionText = (
+      textOf(doc, ".x-item-condition-text .ux-textspans", '[data-testid="x-item-condition"] .ux-textspans', "#vi-itm-cond") ||
+      specific(doc, /^(condition|item condition)$/)
+    ).split(/[“"]/)[0]!; // seller notes follow in quotes
+    const shown = doc.body?.cloneNode(true) as HTMLElement | undefined;
+    shown?.querySelectorAll("script, style, template, noscript").forEach((el) => el.remove());
+    const status = textOf(shown ?? doc, ".d-statusmessage", '[data-testid="d-statusmessage"]', ".vi-ended-msg", "#msgPanel").toLowerCase();
+    const availability = String(offer?.availability ?? "");
+    const photos = [
+      ...ldImages(ld?.image),
+      ...[...doc.querySelectorAll<HTMLImageElement>(".ux-image-carousel-item img, .ux-image-filmstrip-carousel-item img, #icImg, #vi_main_img_fs img")]
+        .map((img) => imgUrl(img, url))
+        .filter((u): u is string => Boolean(u)),
+      meta(doc, "og:image"),
+    ]
+      .filter((u) => /ebayimg\.com/.test(u))
+      .map(fullSize);
+    return {
+      state: SOLD.test(status) ? "sold" : IMPORT_ENDED.test(status) || /outofstock|soldout|discontinued/i.test(availability) ? "ended" : "listed",
+      title,
+      description: id ? await description(doc, id, io) : "",
+      price: priceToMinor(ldText(offer?.price) || doc.querySelector<HTMLElement>('[itemprop="price"]')?.getAttribute("content") || textOf(doc, ".x-price-primary", "#prcIsum")),
+      brand: specific(doc, /^brand$/) || ldText(ld?.brand),
+      size: specific(doc, /^((uk|us|eu) )?(shoe )?size( \(.+\))?$/),
+      colour: specific(doc, /^(main )?colou?r$/),
+      condition: conditionFromText(conditionText) ?? conditionFromText(ldText(offer?.itemCondition)),
+      category: breadcrumbs(doc, title, ["nav.breadcrumbs a", ".seo-breadcrumb-text", "#vi-VR-brumb-lnkLst a"]),
+      photos: uniquePhotos(photos, photoKey),
+    };
+  },
+};
+
 export const ebay: Adapter = {
   marketplace: "ebay",
+
+  importer: ebayImporter,
 
   isSellPage: (url) => url.pathname.startsWith("/lstng") || url.pathname.startsWith("/sl/list"),
 
@@ -279,4 +375,7 @@ export const ebay: Adapter = {
   },
 };
 
-if (typeof chrome !== "undefined" && chrome.runtime?.id) void run(ebay);
+if (typeof chrome !== "undefined" && chrome.runtime?.id) {
+  void run(ebay);
+  void runImport(ebay);
+}

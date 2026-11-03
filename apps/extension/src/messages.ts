@@ -1,4 +1,4 @@
-import type { Account, ItemStatus, ItemWithListings, Marketplace, Settings } from "@jf/shared";
+import type { Account, Condition, ImportState, ItemStatus, ItemWithListings, Marketplace, Settings } from "@jf/shared";
 
 export interface Job {
   /** "list" fills in a new listing; "delist" ends a live one. Missing on jobs from older builds = "list". */
@@ -28,6 +28,33 @@ export interface FillReport {
   warnings: string[];
 }
 
+/** Import mode in one marketplace tab: the page shows a picker for the seller's listings. */
+export interface ImportJob {
+  marketplace: Marketplace;
+  startedAt: number;
+}
+
+/** What a content script read from one of the seller's listing pages. */
+export interface ScrapedListing {
+  externalId: string;
+  url: string;
+  state: ImportState;
+  title: string;
+  description: string;
+  /** Minor units. */
+  price: number | null;
+  brand: string;
+  size: string;
+  colour: string;
+  condition: Condition | null;
+  category: string;
+  /** Photo URLs on the marketplace's image CDN, largest available size. */
+  photos: string[];
+}
+
+/** Sent by the background to a tab's content script (chrome.tabs.sendMessage). */
+export type TabMessage = { type: "IMPORT_ACTIVATE" };
+
 /** Messages handled by the background service worker. */
 export type Request =
   | { type: "AUTH_STATE" }
@@ -40,7 +67,17 @@ export type Request =
   | { type: "GET_IMAGES" }
   | { type: "JOB_PUBLISHED"; url: string; externalId: string }
   | { type: "JOB_DELISTED" }
-  | { type: "JOB_CANCEL" };
+  | { type: "JOB_CANCEL" }
+  /** Open the seller's listings in import mode (new tab), or switch `tabId` into import mode. */
+  | { type: "START_IMPORT"; marketplace: Marketplace; tabId?: number; token?: string }
+  | { type: "GET_IMPORT" }
+  | { type: "IMPORT_STOP" }
+  /** External ids on this marketplace that are already in the inventory → their item ids. */
+  | { type: "IMPORT_KNOWN"; marketplace: Marketplace }
+  /** Download the photos, upload them and create the item. */
+  | { type: "IMPORT_LISTING"; marketplace: Marketplace; listing: ScrapedListing }
+  /** eBay serves descriptions from another origin, which the page itself can't read. */
+  | { type: "FETCH_DESCRIPTION"; url: string };
 
 export interface Responses {
   AUTH_STATE: { account: Account | null };
@@ -54,6 +91,12 @@ export interface Responses {
   JOB_PUBLISHED: null;
   JOB_DELISTED: null;
   JOB_CANCEL: null;
+  START_IMPORT: { tabId: number };
+  GET_IMPORT: { job: ImportJob; settings: Settings } | null;
+  IMPORT_STOP: null;
+  IMPORT_KNOWN: Record<string, string>;
+  IMPORT_LISTING: { itemId: string; created: boolean; photos: number };
+  FETCH_DESCRIPTION: string;
 }
 
 export type Reply<T> = { ok: true; data: T } | { ok: false; error: string };

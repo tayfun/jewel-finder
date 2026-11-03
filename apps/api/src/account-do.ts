@@ -9,6 +9,8 @@ import {
   type ItemData,
   type ItemPatch,
   type ItemStatus,
+  type ImportResult,
+  type ImportState,
   type ItemWithListings,
   type Listing,
   type ListingInput,
@@ -66,6 +68,8 @@ const MIGRATIONS = [
   // v3: postage size and packed weight.
   `ALTER TABLE items ADD COLUMN package_size TEXT;
    ALTER TABLE items ADD COLUMN weight_grams INTEGER;`,
+  // v4: look listings up by their marketplace id (imports de-duplicate on it).
+  `CREATE INDEX listings_external ON listings(marketplace, external_id);`,
 ];
 
 type Row = Record<string, SqlStorageValue>;
@@ -236,6 +240,10 @@ class AccountDOBase extends DurableObject<Env> {
   }
 
   async createItem(input: ItemData): Promise<ItemWithListings> {
+    return (await this.getItem(this.insertItem(input)))!;
+  }
+
+  private insertItem(input: ItemData): string {
     const id = crypto.randomUUID();
     const now = Date.now();
     this.db().exec(
@@ -264,7 +272,7 @@ class AccountDOBase extends DurableObject<Env> {
       now,
       now,
     );
-    return (await this.getItem(id))!;
+    return id;
   }
 
   /** Returns the updated item plus image keys that are no longer referenced. */
@@ -371,6 +379,60 @@ class AccountDOBase extends DurableObject<Env> {
       .exec("SELECT * FROM listings WHERE item_id = ? AND marketplace = ?", itemId, marketplace)
       .one();
     return toListing(row);
+  }
+
+  /** All listings on one marketplace (the extension checks what's already imported). */
+  async listListings(marketplace: Marketplace): Promise<Listing[]> {
+    return this.db()
+      .exec("SELECT * FROM listings WHERE marketplace = ? ORDER BY updated_at DESC", marketplace)
+      .toArray()
+      .map(toListing);
+  }
+
+  /**
+   * Creates an item plus its listing for each existing marketplace listing, skipping any whose
+   * (marketplace, external id) is already in the inventory. Each one is all-or-nothing.
+   */
+  async importListings(
+    marketplace: Marketplace,
+    listings: { externalId: string; url: string; state: ImportState; item: ItemData }[],
+  ): Promise<ImportResult & { skippedImages: string[] }> {
+    const results: ImportResult["results"] = [];
+    const skippedImages: string[] = [];
+    for (const l of listings) {
+      this.ctx.storage.transactionSync(() => {
+        const db = this.db();
+        const existing = db
+          .exec<{ item_id: string }>(
+            "SELECT item_id FROM listings WHERE marketplace = ? AND external_id = ? LIMIT 1",
+            marketplace,
+            l.externalId,
+          )
+          .toArray()[0];
+        if (existing) {
+          results.push({ externalId: l.externalId, itemId: existing.item_id, created: false });
+          skippedImages.push(...l.item.images);
+          return;
+        }
+        const itemId = this.insertItem(l.item);
+        const now = Date.now();
+        db.exec(
+          `INSERT INTO listings (id, item_id, marketplace, status, external_id, url, price, error, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+          crypto.randomUUID(),
+          itemId,
+          marketplace,
+          l.state,
+          l.externalId,
+          l.url,
+          l.item.price,
+          now,
+          now,
+        );
+        results.push({ externalId: l.externalId, itemId, created: true });
+      });
+    }
+    return { results, skippedImages };
   }
 
   async deleteListing(itemId: string, marketplace: Marketplace): Promise<boolean> {

@@ -214,3 +214,31 @@ export interface AutofillSuggestion {
   /** Caveats from the model, e.g. "copyright page not shown; edition unverified". */
   notes: string;
 }
+
+/** Where an imported listing stands on its marketplace. */
+export const ImportState = z.enum(["listed", "sold", "ended"]);
+export type ImportState = z.infer<typeof ImportState>;
+
+/** One existing marketplace listing to bring into the inventory (photos already uploaded). */
+export const ImportListing = z.object({
+  externalId: z.string().trim().min(1).max(100),
+  url: z.url().max(500),
+  state: ImportState.default("listed"),
+  item: ItemInput,
+});
+export type ImportListing = z.input<typeof ImportListing>;
+
+export const ImportRequest = z.object({
+  marketplace: Marketplace,
+  listings: z.array(ImportListing).min(1).max(50),
+});
+export type ImportRequest = z.input<typeof ImportRequest>;
+
+export interface ImportResult {
+  results: {
+    externalId: string;
+    itemId: string;
+    /** false: that listing was already in the inventory, so nothing was added. */
+    created: boolean;
+  }[];
+}

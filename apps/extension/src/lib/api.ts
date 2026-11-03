@@ -30,18 +30,19 @@ export class HttpError extends Error {
 /** Calls the Jewel Finder API with the stored token (or an explicit one). */
 export async function api<T>(
   path: string,
-  init: { method?: string; json?: unknown; token?: string } = {},
+  init: { method?: string; json?: unknown; body?: Blob; token?: string } = {},
 ): Promise<T> {
   const token = init.token ?? (await getAuth())?.token;
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   if (init.json !== undefined) headers["Content-Type"] = "application/json";
+  if (init.body) headers["Content-Type"] = init.body.type;
   let res: Response;
   try {
     res = await fetch(API_URL + path, {
-      method: init.method ?? (init.json !== undefined ? "POST" : "GET"),
+      method: init.method ?? (init.json !== undefined || init.body ? "POST" : "GET"),
       headers,
-      body: init.json !== undefined ? JSON.stringify(init.json) : undefined,
+      body: init.json !== undefined ? JSON.stringify(init.json) : init.body,
     });
   } catch {
     throw new HttpError(0, `Can't reach Jewel Finder at ${API_URL}`);

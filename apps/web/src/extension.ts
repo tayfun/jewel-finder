@@ -53,7 +53,12 @@ export function delistViaExtension(itemId: string, marketplace: Marketplace): Pr
   return request("DELIST_ITEM", itemId, marketplace);
 }
 
-function request(type: "LIST_ITEM" | "DELIST_ITEM", itemId: string, marketplace: Marketplace): Promise<void> {
+/** Asks the extension to open the seller's listings on a marketplace, ready to pick what to import. */
+export function importViaExtension(marketplace: Marketplace): Promise<void> {
+  return request("IMPORT_LISTINGS", "", marketplace);
+}
+
+function request(type: "LIST_ITEM" | "DELIST_ITEM" | "IMPORT_LISTINGS", itemId: string, marketplace: Marketplace): Promise<void> {
   const requestId = crypto.randomUUID();
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -67,6 +72,7 @@ function request(type: "LIST_ITEM" | "DELIST_ITEM", itemId: string, marketplace:
       if (msg.ok) resolve();
       else reject(new Error(msg.error ?? "The extension couldn't open the marketplace"));
     });
-    post({ source: BRIDGE_WEB, type, requestId, itemId, marketplace, token: getToken() ?? "" });
+    const token = getToken() ?? "";
+    post(type === "IMPORT_LISTINGS" ? { source: BRIDGE_WEB, type, requestId, marketplace, token } : { source: BRIDGE_WEB, type, requestId, itemId, marketplace, token });
   });
 }

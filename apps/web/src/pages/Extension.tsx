@@ -16,7 +16,7 @@ export function Extension() {
           <p>
             The extension opens Vinted or eBay's listing page and fills it in from your inventory: photos, title,
             description, price, condition and package size. You check it and press publish, and the listing link is saved
-            back to the item.
+            back to the item. It can also <Link to="/import">import the listings you already have</Link> on Vinted and eBay.
           </p>
           <p className="muted small">Works in Chrome, Edge, Brave and other Chromium browsers on a computer.</p>
           <p className="muted small">

@@ -10,6 +10,7 @@ import { Home } from "./pages/Home";
 import { ItemDetail } from "./pages/ItemDetail";
 import { EditItem, NewItem } from "./pages/ItemEditor";
 import { Extension } from "./pages/Extension";
+import { Import } from "./pages/Import";
 import { Privacy } from "./pages/Privacy";
 import { Settings } from "./pages/Settings";
 import "./styles.css";
@@ -33,6 +34,7 @@ const router = createRouter([
       { path: "/items/:id/edit", element: <EditItem /> },
       { path: "/settings", element: <Settings /> },
       { path: "/extension", element: <Extension /> },
+      { path: "/import", element: <Import /> },
     ],
   },
     ],

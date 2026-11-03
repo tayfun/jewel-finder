@@ -59,6 +59,24 @@ async function load() {
   }
 }
 
+/** Import mode in the current tab when it's on that marketplace, otherwise a new tab on your listings. */
+async function startImport(marketplace: Marketplace) {
+  busy = `import:${marketplace}`;
+  error = "";
+  render();
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const host = tab?.url ? new URL(tab.url).hostname : "";
+    const here = marketplace === "vinted" ? /(^|\.)vinted\./.test(host) : /(^|\.)ebay\./.test(host);
+    await send({ type: "START_IMPORT", marketplace, tabId: here ? tab?.id : undefined });
+  } catch (e) {
+    error = (e as Error).message;
+  } finally {
+    busy = "";
+    render();
+  }
+}
+
 async function list(item: ItemWithListings, marketplace: Marketplace) {
   busy = `${item.id}:${marketplace}`;
   error = "";
@@ -200,6 +218,22 @@ function renderInventory() {
     h("div", { class: "toolbar" }, search, filter),
     error ? h("p", { class: "error" }, error) : null,
     h("p", { class: "notice" }, "Make sure you're signed in to Vinted / eBay in this browser before listing."),
+    h(
+      "div",
+      { class: "import" },
+      h("span", { class: "muted" }, "Import listings:"),
+      ...MARKETPLACES.map((m) =>
+        h(
+          "button",
+          {
+            disabled: !!busy,
+            title: `Pick ${MARKETPLACE_LABELS[m]} listings to add to your inventory (uses this tab if it's on ${MARKETPLACE_LABELS[m]})`,
+            onClick: () => startImport(m),
+          },
+          busy === `import:${m}` ? "Opening…" : `⬇ ${MARKETPLACE_LABELS[m]}`,
+        ),
+      ),
+    ),
     items.length
       ? h("ul", { class: "items" }, ...items.map(renderItem))
       : h("div", { class: "empty" }, loading ? "Loading…" : "No items here."),

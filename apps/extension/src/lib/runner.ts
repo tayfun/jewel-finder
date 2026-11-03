@@ -1,5 +1,5 @@
 import { MARKETPLACE_LABELS, type Marketplace } from "@jf/shared";
-import { send, type FillReport, type JobContext } from "../messages";
+import { send, type FillReport, type JobContext, type ScrapedListing } from "../messages";
 import { setCancelHandler, showBanner } from "./banner";
 import { dataUrlToFile } from "./dom";
 
@@ -20,6 +20,25 @@ export interface Adapter {
   detectPublished(url: URL, doc: Document): Published | null;
   /** Ending a live listing (cross-delisting). */
   delist: Delister;
+  /** Bringing the seller's existing listings into the inventory. */
+  importer: Importer;
+}
+
+export interface ImportIO {
+  /** Fetches a URL the page itself can't read (another origin), via the background. */
+  fetchText(url: string): Promise<string>;
+}
+
+/** Reads the seller's existing listings. The listing cards themselves are found by their links. */
+export interface Importer {
+  /** A button to the seller's own listings when this page isn't one. */
+  listingsLink(url: URL, doc: Document): { href: string; label: string } | null;
+  /** Shown when the page has no listings on it. */
+  emptyHint: string;
+  /** False shows a warning: imports are meant for the seller's own listings. */
+  isOwnListings(url: URL, doc: Document): boolean;
+  /** Reads one listing page, fetched from the marketplace and parsed (its scripts don't run). */
+  parse(doc: Document, url: string, io: ImportIO): Promise<Omit<ScrapedListing, "externalId" | "url">>;
 }
 
 /**

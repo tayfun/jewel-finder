@@ -1,5 +1,6 @@
 import {
   Credentials,
+  ImportRequest,
   ItemInput,
   ItemPatch,
   ItemStatus,
@@ -10,6 +11,7 @@ import {
   type ApiError,
   type AuthResponse,
   type AutofillSuggestion,
+  type ImportResult,
 } from "@jf/shared";
 import * as Sentry from "@sentry/cloudflare";
 import { Hono, type Context } from "hono";
@@ -159,6 +161,16 @@ app.post("/api/items", async (c) => {
   return c.json(await c.var.account.createItem(input), 201);
 });
 
+// Existing marketplace listings brought in by the extension. Photos are uploaded first via /api/images.
+app.post("/api/items/import", async (c) => {
+  const { marketplace, listings } = parse(ImportRequest, await body(c));
+  assertOwnImages(c.var.userId, listings.flatMap((l) => l.item.images));
+  const { results, skippedImages } = await c.var.account.importListings(marketplace, listings);
+  // Already imported: the photos just uploaded for it aren't needed.
+  if (skippedImages.length) c.executionCtx.waitUntil(c.env.IMAGES.delete(skippedImages));
+  return c.json<ImportResult>({ results });
+});
+
 app.get("/api/items/:id", async (c) => {
   return c.json((await c.var.account.getItem(c.req.param("id"))) ?? notFound());
 });
@@ -225,6 +237,11 @@ app.post("/api/items/:id/autofill", async (c) => {
     if (e instanceof AutofillError) throw new HTTPException(502, { message: e.message });
     throw e;
   }
+});
+
+app.get("/api/listings", async (c) => {
+  const marketplace = parse(Marketplace, c.req.query("marketplace"));
+  return c.json({ listings: await c.var.account.listListings(marketplace) });
 });
 
 app.put("/api/items/:id/listings/:marketplace", async (c) => {

@@ -1,4 +1,4 @@
-import type { AuthResponse, ItemWithListings, Stats } from "@jf/shared";
+import type { AuthResponse, ImportResult, ItemWithListings, Listing, Stats } from "@jf/shared";
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
@@ -172,5 +172,75 @@ describe("images", () => {
     }
     expect(status).toBe(404);
     expect((await exports.default.fetch(`${BASE}/images/${dup.data.images[0]}`)).status).toBe(200);
+  });
+});
+
+describe("imports", () => {
+  const png = () => Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="), (c) => c.charCodeAt(0));
+
+  it("creates items with their listings and skips ones already imported", async () => {
+    const { token } = await signUp();
+    const up = await call<{ key: string }>("/api/images", { token, body: png(), type: "image/png" });
+    const listing = (id: string, extra: Record<string, unknown> = {}) => ({
+      externalId: id,
+      url: `https://www.vinted.co.uk/items/${id}-thing`,
+      item: { title: `Thing ${id}`, price: 1200, ...extra },
+    });
+
+    const first = await call<ImportResult>("/api/items/import", {
+      token,
+      json: {
+        marketplace: "vinted",
+        listings: [
+          listing("111", { images: [up.data.key], brand: "Zara", condition: "good" }),
+          { ...listing("222"), state: "sold", item: { title: "Gone", status: "sold", quantity: 0 } },
+        ],
+      },
+    });
+    expect(first.status).toBe(200);
+    expect(first.data.results.map((r) => [r.externalId, r.created])).toEqual([["111", true], ["222", true]]);
+
+    const item = await call<ItemWithListings>(`/api/items/${first.data.results[0]!.itemId}`, { token });
+    expect(item.data).toMatchObject({ title: "Thing 111", brand: "Zara", condition: "good", status: "in_stock", sku: "JF-0001" });
+    expect(item.data.images).toEqual([up.data.key]);
+    expect(item.data.listings).toEqual([
+      expect.objectContaining({ marketplace: "vinted", status: "listed", externalId: "111", url: "https://www.vinted.co.uk/items/111-thing", price: 1200 }),
+    ]);
+    const sold = await call<ItemWithListings>(`/api/items/${first.data.results[1]!.itemId}`, { token });
+    expect(sold.data).toMatchObject({ status: "sold", quantity: 0 });
+    expect(sold.data.listings[0]?.status).toBe("sold");
+
+    const known = await call<{ listings: Listing[] }>("/api/listings?marketplace=vinted", { token });
+    expect(known.data.listings.map((l) => l.externalId).sort()).toEqual(["111", "222"]);
+    expect((await call<{ listings: Listing[] }>("/api/listings?marketplace=ebay", { token })).data.listings).toEqual([]);
+
+    // Re-running adds only what's new; the same id on another marketplace is a different listing.
+    const again = await call<ImportResult>("/api/items/import", { token, json: { marketplace: "vinted", listings: [listing("111"), listing("333")] } });
+    expect(again.data.results).toEqual([
+      { externalId: "111", itemId: first.data.results[0]!.itemId, created: false },
+      expect.objectContaining({ externalId: "333", created: true }),
+    ]);
+    const ebay = await call<ImportResult>("/api/items/import", {
+      token,
+      json: { marketplace: "ebay", listings: [{ ...listing("111"), url: "https://www.ebay.co.uk/itm/111" }] },
+    });
+    expect(ebay.data.results[0]?.created).toBe(true);
+    expect((await call<{ items: unknown[] }>("/api/items", { token })).data.items).toHaveLength(4);
+    expect((await call<Stats>("/api/stats", { token })).data.listed).toEqual({ vinted: 2, ebay: 1 });
+  });
+
+  it("validates the batch and rejects other users' photos", async () => {
+    const a = await signUp();
+    const b = await signUp();
+    const up = await call<{ key: string }>("/api/images", { token: a.token, body: png(), type: "image/png" });
+    const stolen = await call("/api/items/import", {
+      token: b.token,
+      json: { marketplace: "vinted", listings: [{ externalId: "1", url: "https://www.vinted.co.uk/items/1", item: { title: "x", images: [up.data.key] } }] },
+    });
+    expect(stolen.status).toBe(400);
+    expect((await call("/api/items/import", { token: b.token, json: { marketplace: "vinted", listings: [] } })).status).toBe(400);
+    expect((await call("/api/items/import", { token: b.token, json: { marketplace: "etsy", listings: [] } })).status).toBe(400);
+    expect((await call("/api/listings?marketplace=etsy", { token: b.token })).status).toBe(400);
+    expect((await call<{ items: unknown[] }>("/api/items", { token: b.token })).data.items).toHaveLength(0);
   });
 });

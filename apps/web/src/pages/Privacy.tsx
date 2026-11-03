@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import { ThemeToggle } from "../components/ThemeToggle";
 
-const UPDATED = "2 November 2026";
+const UPDATED = "3 November 2026";
 /** Set VITE_CONTACT_EMAIL in apps/web/.env; shown for privacy requests. */
 const CONTACT = import.meta.env.VITE_CONTACT_EMAIL || null;
 
@@ -39,8 +39,8 @@ export function Privacy() {
             <strong>Your account:</strong> your email address and a password, which we store only as a salted hash.
           </li>
           <li>
-            <strong>Your inventory:</strong> the items you add (titles, descriptions, prices, costs, notes, book details,
-            package sizes), their photos, your settings, and the Vinted/eBay listings you link to them.
+            <strong>Your inventory:</strong> the items you add or import (titles, descriptions, prices, costs, notes, book
+            details, package sizes), their photos, your settings, and the Vinted/eBay listings you link to them.
           </li>
           <li>
             <strong>Technical data:</strong> when you use the app, our hosting provider processes your IP address and
@@ -62,6 +62,12 @@ export function Privacy() {
             When you start a listing, it opens the Vinted or eBay sell page and fills in the form with that item's details
             and photos. It only reads those marketplace pages to find the form fields and, once you publish, the address
             of your new listing, which it saves to the item in your inventory.
+          </li>
+          <li>
+            When you import listings, it reads the listings page you have open on Vinted or eBay to show you what's there,
+            and for each listing you pick, it opens that listing to copy its title, description, price, details and
+            photos into your inventory. It downloads the photos from Vinted's and eBay's image servers, and eBay
+            descriptions from eBay's description server. It only does this after you start an import and pick listings.
           </li>
           <li>
             It only runs on Vinted, eBay and the Jewel Finder site. It doesn't read your browsing history, other
