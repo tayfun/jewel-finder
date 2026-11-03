@@ -200,6 +200,10 @@ the Worker, uploads source maps to Sentry (when configured) and runs `wrangler d
 
 (Imports and relist & bump are built: see section 4, steps 7 and 9.)
 
+**Pricing from comparables.** Suggest a price from what the same or similar items sold for (eBay sold
+searches), or failing that are listed at (eBay, Vinted), with collectable features (first edition,
+signed, rare…) flagged and matched like for like. Full plan: [PRICING.md](PRICING.md).
+
 **Find the treasure.** Help users spot underpriced items to buy and resell.
 - Saved searches on Vinted/eBay run by the extension in the user's browser, flagging listings below
   a price threshold or below the user's own sold prices for similar items.
