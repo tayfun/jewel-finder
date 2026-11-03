@@ -13,7 +13,8 @@ const CSS = `
     font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: #16191d; background: #fff;
     border: 1px solid #e2e5e9; border-radius: 12px; box-shadow: 0 10px 30px rgb(0 0 0 / 18%); }
   header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #0f766e; color: #fff;
-    border-radius: 12px 12px 0 0; font-weight: 600; }
+    border-radius: 12px 12px 0 0; font-weight: 600; cursor: move; user-select: none; touch-action: none; }
+  .dragging { opacity: .92; box-shadow: 0 16px 40px rgb(0 0 0 / 28%); }
   header .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   header button { all: unset; cursor: pointer; padding: 0 4px; font-size: 16px; opacity: .85; }
   .body { padding: 10px 12px; }
@@ -39,6 +40,91 @@ let root: ShadowRoot;
 let onCancel: () => void = () => {};
 let cancelLabel = "Cancel this listing";
 
+// ------------------------------------------------------------- dragging
+// The panel can be dragged by its header so it doesn't cover the page. The spot is remembered (in
+// the extension's storage, not the site's) for the next page; double-click the header to put it back.
+
+type Pos = { left: number; top: number };
+const POS_KEY = "bannerPos";
+/** Null: the default bottom-right corner. */
+let pos: Pos | null = null;
+let posLoaded = false;
+let box: HTMLElement | null = null;
+
+const storage = () => (typeof chrome !== "undefined" ? chrome.storage?.local : undefined);
+
+function loadPos() {
+  if (posLoaded) return;
+  posLoaded = true;
+  storage()
+    ?.get(POS_KEY)
+    .then((r) => {
+      const saved = r[POS_KEY] as Pos | undefined;
+      // Don't undo a drag that happened while this was loading.
+      if (saved && pos === null && typeof saved.left === "number" && typeof saved.top === "number") {
+        pos = saved;
+        applyPos();
+      }
+    })
+    .catch(() => {});
+}
+
+function savePos() {
+  void storage()?.set({ [POS_KEY]: pos }).catch(() => {});
+}
+
+/** Keeps at least the header on screen, whatever the window size. */
+function clamp(p: Pos, width: number): Pos {
+  return {
+    left: Math.min(Math.max(0, p.left), Math.max(0, window.innerWidth - width)),
+    top: Math.min(Math.max(0, p.top), Math.max(0, window.innerHeight - 44)),
+  };
+}
+
+function applyPos() {
+  if (!box) return;
+  if (!pos) {
+    box.style.left = box.style.top = box.style.right = box.style.bottom = "";
+    return;
+  }
+  const p = clamp(pos, box.offsetWidth || 340);
+  box.style.left = `${p.left}px`;
+  box.style.top = `${p.top}px`;
+  box.style.right = box.style.bottom = "auto";
+}
+
+function makeDraggable(header: HTMLElement, target: HTMLElement) {
+  header.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || (e.target as Element).closest("button")) return;
+    e.preventDefault();
+    const rect = target.getBoundingClientRect();
+    const dx = e.clientX - rect.left;
+    const dy = e.clientY - rect.top;
+    header.setPointerCapture?.(e.pointerId);
+    target.classList.add("dragging");
+    const move = (ev: PointerEvent) => {
+      pos = clamp({ left: ev.clientX - dx, top: ev.clientY - dy }, rect.width);
+      applyPos();
+    };
+    const up = () => {
+      header.removeEventListener("pointermove", move);
+      header.removeEventListener("pointerup", up);
+      header.removeEventListener("pointercancel", up);
+      target.classList.remove("dragging");
+      savePos();
+    };
+    header.addEventListener("pointermove", move);
+    header.addEventListener("pointerup", up);
+    header.addEventListener("pointercancel", up);
+  });
+  header.addEventListener("dblclick", (e) => {
+    if ((e.target as Element).closest("button")) return;
+    pos = null;
+    applyPos();
+    savePos();
+  });
+}
+
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, ...kids: (Node | string)[]) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
@@ -57,13 +143,20 @@ export function showBanner(state: BannerState) {
     host = el("div", { id: "jewel-finder-banner" });
     root = host.attachShadow({ mode: "closed" });
     document.documentElement.append(host);
+    loadPos();
   }
-  const box = el("div", { class: `box ${state.kind}` });
+  const panel = el("div", { class: `box ${state.kind}` });
+  box = panel;
   const min = el("button", { title: "Minimise" }, "–");
-  min.onclick = () => box.classList.toggle("min");
+  min.onclick = () => {
+    panel.classList.toggle("min");
+    applyPos();
+  };
   const close = el("button", { title: "Hide" }, "×");
   close.onclick = () => hideBanner();
-  box.append(el("header", {}, el("span", {}, "💎"), el("span", { class: "t" }, state.title), min, close));
+  const header = el("header", { title: "Drag to move · double-click to put back" }, el("span", {}, "💎"), el("span", { class: "t" }, state.title), min, close);
+  makeDraggable(header, panel);
+  panel.append(header);
 
   const body = el("div", { class: "body" });
   if (state.kind === "filled") {
@@ -90,7 +183,7 @@ export function showBanner(state: BannerState) {
   } else {
     body.append(el("p", { class: "msg" }, state.message));
   }
-  box.append(body);
+  panel.append(body);
 
   if (state.kind !== "done") {
     const cancel = el("button", {}, cancelLabel);
@@ -98,13 +191,17 @@ export function showBanner(state: BannerState) {
       onCancel();
       hideBanner();
     };
-    box.append(el("div", { class: "footer" }, el("span", { class: "val" }, "Jewel Finder"), cancel));
+    panel.append(el("div", { class: "footer" }, el("span", { class: "val" }, "Jewel Finder"), cancel));
   }
 
-  root.replaceChildren(el("style", {}, CSS), box);
+  root.replaceChildren(el("style", {}, CSS), panel);
+  applyPos();
 }
+
+window.addEventListener("resize", applyPos);
 
 export function hideBanner() {
   host?.remove();
   host = null;
+  box = null;
 }
