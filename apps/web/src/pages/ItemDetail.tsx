@@ -5,6 +5,8 @@ import {
   MARKETPLACE_LABELS,
   PACKAGE_SIZE_LABELS,
   formatMoney,
+  isStale,
+  listingAgeDays,
   parseListingUrl,
   type DuplicatePair,
   type ItemWithListings,
@@ -19,7 +21,7 @@ import { BOOK_FIELDS } from "../book";
 import { Autofill } from "../components/Autofill";
 import { StatusBadge } from "../components/Badges";
 import { Lightbox } from "../components/Lightbox";
-import { delistViaExtension, listViaExtension, useExtension } from "../extension";
+import { delistViaExtension, listViaExtension, relistViaExtension, useExtension } from "../extension";
 import { useLoad } from "../hooks";
 
 export function ItemDetail() {
@@ -331,6 +333,7 @@ export function ItemDetail() {
 
 function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void }) {
   const extension = useExtension();
+  const { settings } = useAccount();
   const [busy, setBusy] = useState<Marketplace | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [manual, setManual] = useState<Marketplace | null>(null);
@@ -374,6 +377,18 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
     setError(null);
     try {
       await delistViaExtension(item.id, m);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function relist(m: Marketplace) {
+    setBusy(m);
+    setError(null);
+    try {
+      await relistViaExtension(item.id, m);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -433,6 +448,13 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
                 )}
               </div>
               {l?.error && <p className="error small">{l.error}</p>}
+              {l?.status === "listed" && l.listedAt != null && (
+                <p className={`small reason ${isStale(item, l, settings) ? "stale-text" : "muted"}`}>
+                  Up for {listingAgeDays(l) === 0 ? "less than a day" : `${listingAgeDays(l)} day${listingAgeDays(l) === 1 ? "" : "s"}`}
+                  {l.relistedCount > 0 && ` · relisted ${l.relistedCount}×`}
+                  {isStale(item, l, settings) && " · relist to bump it back to the top"}
+                </p>
+              )}
               {l?.status === "ending" && (
                 <p className="small reason">
                   Sold elsewhere but still live here. End it so it can't sell twice.
@@ -457,6 +479,24 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
                     </button>
                     <button onClick={() => markEnded(m)}>I've ended it</button>
                   </>
+                )}
+                {l?.status === "listed" && item.status === "in_stock" && (
+                  <button
+                    className={isStale(item, l, settings) ? "primary" : ""}
+                    disabled={!!busy || !extension || !l.url || !item.images.length}
+                    title={
+                      !l.url
+                        ? "No listing link saved, so the old listing can't be removed for you"
+                        : !item.images.length
+                          ? "Add a photo first"
+                          : !extension
+                            ? "Extension not detected"
+                            : `List it again on ${MARKETPLACE_LABELS[m]}, then remove this listing: bumps it to the top`
+                    }
+                    onClick={() => relist(m)}
+                  >
+                    {busy === m ? "Opening…" : "↻ Relist"}
+                  </button>
                 )}
                 {canList && (
                   <button

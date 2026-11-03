@@ -1,8 +1,8 @@
 # Jewel Finder
 
 Inventory for eBay / Vinted resellers, with a Chrome extension that fills in the marketplaces'
-own listing forms, ends listings elsewhere when something sells, and imports the listings you already
-have. See [PLAN.md](PLAN.md) for the architecture, API and roadmap.
+own listing forms, ends listings elsewhere when something sells, relists stale listings to bump them
+back to the top, and imports the listings you already have. See [PLAN.md](PLAN.md) for the architecture, API and roadmap.
 
 ```
 apps/api        Cloudflare Worker (Hono) + AccountDO Durable Object (SQLite) + R2 photos; also serves the web app
@@ -49,6 +49,29 @@ extension records the listing URL back in your inventory.
 Mark an item sold ("Sold on Vinted/eBay/elsewhere") → its other live listings become "Needs ending" and
 the extension opens each one → it gets the delete/end step ready (Vinted: Delete; eBay: End listing with
 a reason) and you confirm → once the listing is gone it's marked ended.
+
+### Relist & bump
+
+Listings sink in search as they age. Relisting puts the item up again as a brand-new listing and then
+removes the old one, so it shows up as new. A live listing counts as stale after **21 days on Vinted**
+or **60 on eBay** (Settings → Relisting).
+
+- **Where:** stale listings get an age badge ("Vinted · 30d") on the Inventory page and in the side
+  panel, an Inventory notice links to `/relist` (also in the top nav), and each item page shows how long
+  a listing has been up and how often it was relisted.
+- **Relist one:** "↻ Relist" on the item page, a `/relist` row, or the side panel.
+- **Relist several:** tick rows on `/relist` (or Select all) → **Relist selected**. Each opens its own
+  tab, at most 10 per click, since each needs you to check the form and publish.
+
+What happens, in one tab: the extension opens the sell page and fills it from your inventory, as when
+listing → you publish → it records the new listing (new link, relist count + 1, clock restarted) and
+moves the tab to the **old** listing → it gets Delete / End listing ready and you confirm → once the old
+one is gone, done. The new listing goes up first, so stopping halfway never loses the listing; until the
+old one is gone, the item shows "Previous listing still live: <link>". A listing needs its link saved
+to be relisted, since that's how the old one is found.
+
+Vinted and eBay use the same flow (on eBay you still pick the category on the first page). The clock for
+an imported listing starts at import, because the marketplaces' listing dates aren't read yet.
 
 ### Importing existing listings
 

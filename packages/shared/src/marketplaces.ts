@@ -1,4 +1,4 @@
-import type { BookFormat, Condition, ListingStatus, Marketplace, PackageSize, Rarity, Settings } from "./schemas";
+import type { BookFormat, Condition, Item, Listing, ListingStatus, Marketplace, PackageSize, Rarity, Settings } from "./schemas";
 
 export const MARKETPLACE_LABELS: Record<Marketplace, string> = {
   vinted: "Vinted",
@@ -170,4 +170,28 @@ export function priceToMinor(input: string | number | null | undefined): number 
   s = dec ? `${whole}.${dec[1]}` : whole;
   const n = Number(s);
   return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
+
+const DAY = 86_400_000;
+
+/** Days after which a live listing on this marketplace counts as stale (from settings). */
+export function relistAfterDays(marketplace: Marketplace, settings: Settings): number {
+  return marketplace === "vinted" ? settings.vintedRelistDays : settings.ebayRelistDays;
+}
+
+/** Whole days since the listing went live, or null if we don't know. */
+export function listingAgeDays(listing: Pick<Listing, "listedAt">, now = Date.now()): number | null {
+  return listing.listedAt == null ? null : Math.max(0, Math.floor((now - listing.listedAt) / DAY));
+}
+
+/** A live listing of an in-stock item that's been up longer than the relist interval. */
+export function isStale(
+  item: Pick<Item, "status">,
+  listing: Pick<Listing, "status" | "listedAt" | "marketplace">,
+  settings: Settings,
+  now = Date.now(),
+): boolean {
+  if (item.status !== "in_stock" || listing.status !== "listed") return false;
+  const age = listingAgeDays(listing, now);
+  return age != null && age >= relistAfterDays(listing.marketplace, settings);
 }

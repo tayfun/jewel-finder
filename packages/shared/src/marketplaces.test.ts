@@ -3,7 +3,9 @@ import {
   EBAY_CONDITION_LABELS,
   conditionFromText,
   ebayPackageSize,
+  isStale,
   isValidIsbn,
+  listingAgeDays,
   myListingsUrl,
   parseListingUrl,
   priceToMinor,
@@ -137,8 +139,35 @@ describe("imports", () => {
   });
 
   it("knows where the seller's listings are", () => {
-    const settings = { currency: "GBP", vintedDomain: "www.vinted.fr", ebayDomain: "www.ebay.de" } as const;
+    const settings = Settings.parse({ vintedDomain: "www.vinted.fr", ebayDomain: "www.ebay.de" });
     expect(myListingsUrl("vinted", settings)).toBe("https://www.vinted.fr/");
     expect(myListingsUrl("ebay", settings)).toBe("https://www.ebay.de/sh/lst/active");
+  });
+});
+
+describe("staleness", () => {
+  const DAY = 86_400_000;
+  const now = Date.UTC(2026, 10, 3);
+  const live = (marketplace: "vinted" | "ebay", days: number) => ({ marketplace, status: "listed" as const, listedAt: now - days * DAY });
+
+  it("counts whole days since a listing went live", () => {
+    expect(listingAgeDays({ listedAt: now - 3.9 * DAY }, now)).toBe(3);
+    expect(listingAgeDays({ listedAt: null }, now)).toBeNull();
+    expect(listingAgeDays({ listedAt: now + DAY }, now)).toBe(0);
+  });
+
+  it("uses each marketplace's relist interval", () => {
+    expect(settings).toMatchObject({ vintedRelistDays: 21, ebayRelistDays: 60 });
+    const inStock = { status: "in_stock" as const };
+    expect(isStale(inStock, live("vinted", 21), settings, now)).toBe(true);
+    expect(isStale(inStock, live("vinted", 20), settings, now)).toBe(false);
+    expect(isStale(inStock, live("ebay", 30), settings, now)).toBe(false);
+    expect(isStale(inStock, live("ebay", 30), { ...settings, ebayRelistDays: 30 }, now)).toBe(true);
+  });
+
+  it("only flags live listings of items still for sale", () => {
+    expect(isStale({ status: "sold" }, live("vinted", 90), settings, now)).toBe(false);
+    expect(isStale({ status: "in_stock" }, { ...live("vinted", 90), status: "ending" }, settings, now)).toBe(false);
+    expect(isStale({ status: "in_stock" }, { ...live("vinted", 90), listedAt: null }, settings, now)).toBe(false);
   });
 });

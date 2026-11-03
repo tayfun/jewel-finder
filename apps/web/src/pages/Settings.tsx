@@ -52,6 +52,33 @@ export function Settings() {
             <input value={form.ebayDomain} onChange={(e) => setForm({ ...form, ebayDomain: e.target.value.trim() })} />
             <small className="muted">e.g. www.ebay.co.uk, www.ebay.com, www.ebay.de</small>
           </label>
+          <h2>Relisting</h2>
+          <p className="muted small">
+            Listings sink as they get older. After this many days a live listing is flagged so you can relist it, which puts
+            it up again as a new listing and removes the old one.
+          </p>
+          <div className="grid-2">
+            <label>
+              Vinted: relist after (days)
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={form.vintedRelistDays}
+                onChange={(e) => setForm({ ...form, vintedRelistDays: e.target.valueAsNumber })}
+              />
+            </label>
+            <label>
+              eBay: relist after (days)
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={form.ebayRelistDays}
+                onChange={(e) => setForm({ ...form, ebayRelistDays: e.target.valueAsNumber })}
+              />
+            </label>
+          </div>
           {error && <p className="error">{error}</p>}
           <div className="form-actions">
             {status && <span className="muted">{status}</span>}

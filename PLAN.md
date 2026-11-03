@@ -62,6 +62,11 @@ own "sell an item" form (no marketplace APIs — Vinted has none, and we don't w
   items. "Duplicate" (restock) records one for the source and its copy.
 - **listings**: `id, item_id, marketplace (vinted|ebay), status (pending|listed|sold|ended|failed),
   external_id, url, price, error, created_at, updated_at` — unique on `(item_id, marketplace)`
+  - `listed_at`, `relisted_count` (migration v6): when it last went live (published, imported, or put
+    up again under a new id) and how often a live listing was replaced by a new id. Set by the listing
+    upsert, so manual "Mark as listed" with a new link counts too. Backfilled from `updated_at`.
+- **settings** also hold `vintedRelistDays` (21) and `ebayRelistDays` (60): live listings of in-stock
+  items older than that are stale (`isStale` in shared).
 
 ## 3. API surface
 
@@ -140,6 +145,15 @@ GET    /images/:key                                        → image bytes (publ
    note on the item page, the import panel's summary, and `/duplicates` to review. Merging keeps the chosen
    item's details and photos, fills its blanks, unions tags, moves listings (refusing two live ones on one
    site) and, if either had sold, marks it sold and flags the rest for ending.
+9. **Relist & bump.** `relist` job (bridge `RELIST_ITEM`, side panel, `/relist`): the background
+   checks the listing is live with a saved link, opens the sell page and stores the job with
+   `target: {externalId, url}` of the old listing. The content script fills the form as for a new
+   listing. On publish, `JOB_PUBLISHED` saves the new id/link (the upsert bumps `relisted_count` and
+   restarts `listed_at`), sets the listing's `error` to "Previous listing still live: …", turns the job into
+   `cleanup` and returns the old URL; the tab goes there and runs the delist step against `job.target`
+   instead of the item's listing. When `isDone`, `JOB_DELISTED` clears the error and leaves the listing
+   live. New first, then delete: a half-finished relist leaves two live listings (flagged), never zero.
+   Stale count is in `Stats.stale`; the web app works out staleness itself from `listedAt` + settings.
 
 Selectors live in one adapter file per marketplace with multiple fallback strategies
 (test ids → names → label text → placeholders) because marketplace DOMs change without notice.
@@ -147,7 +161,7 @@ Selectors live in one adapter file per marketplace with multiple fallback strate
 ## 5. Implementation steps
 
 Status (2026-11-03): steps 1–5 are implemented and deployed, along with AI auto-fill, Sentry, package
-sizes, the extension install page and the privacy policy. Cross-delisting and imports are built but not deployed. Tests: shared 21, API 22 (in workerd), extension 32
+sizes, the extension install page and the privacy policy. Cross-delisting, imports, duplicate detection and relisting are built but not deployed. Tests: shared 24, API 24 (in workerd), extension 34
 (happy-dom, incl. a real React-controlled form). The web app was exercised end to end in a browser.
 Live marketplace checks so far: one eBay listing was tried with the production extension; the
 description fix was built from the real eBay form. Still unverified live: eBay's package size picker (only its summary button was
@@ -184,14 +198,7 @@ the Worker, uploads source maps to Sentry (when configured) and runs `wrangler d
 
 ## 7. Product roadmap (promised on the landing page, not built yet)
 
-(Imports are built: see section 4, step 7.)
-
-**Relist & bump to the top.** Refresh stale listings without manual delete + recreate.
-- Vinted: "bump" is either Vinted's paid push or delete-and-relist; ours is the latter, automated:
-  the extension re-creates the listing from inventory data (photos, fields) and then deletes the old one.
-- eBay: use the native "Sell similar" / relist flow for ended items, and end-and-relist for stale active ones.
-- Track `listed_at` / `relisted_count` per listing; show "stale for N days" and a "Relist" action,
-  plus a bulk "relist everything older than N days".
+(Imports and relist & bump are built: see section 4, steps 7 and 9.)
 
 **Find the treasure.** Help users spot underpriced items to buy and resell.
 - Saved searches on Vinted/eBay run by the extension in the user's browser, flagging listings below
@@ -224,4 +231,7 @@ the Worker, uploads source maps to Sentry (when configured) and runs `wrangler d
    and check what JSON-LD actually carries (Vinted: all photos? condition?), whether Vinted's CDN serves
    photos to the extension, and that Seller Hub's rows are picked up. Then: matching an eBay import to
    an item already imported from Vinted (today it becomes a second item).
-6. Relist/bump (section 7).
+6. **Relist, live check**: relist one Vinted and one eBay listing for real. Does Vinted accept the same
+   photos again straight away, or flag a duplicate? Does eBay's "Sell similar" (opened from the old item)
+   beat our fill, which still needs the category picked? Read each listing's real upload date on import
+   so the clock doesn't start at import time.

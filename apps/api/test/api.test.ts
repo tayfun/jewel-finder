@@ -348,3 +348,48 @@ describe("duplicates", () => {
     expect((await call<{ pairs: DuplicatePair[] }>("/api/duplicates", { token })).data.pairs).toHaveLength(0);
   });
 });
+
+describe("relisting", () => {
+  it("records when a listing went live and counts relists", async () => {
+    const { token } = await signUp();
+    const { data: item } = await call<ItemWithListings>("/api/items", { token, json: { title: "Jacket", price: 3000 } });
+    const put = (json: unknown) => call<Listing>(`/api/items/${item.id}/listings/vinted`, { token, method: "PUT", json });
+
+    const pending = await put({ status: "pending" });
+    expect(pending.data).toMatchObject({ listedAt: null, relistedCount: 0 });
+    const live = await put({ status: "listed", externalId: "100", url: "https://www.vinted.co.uk/items/100" });
+    expect(live.data.listedAt).toBeGreaterThan(0);
+    expect(live.data.relistedCount).toBe(0);
+
+    // Updates that keep the same listing (clearing an error, same id) don't restart the clock.
+    await new Promise((r) => setTimeout(r, 5));
+    const same = await put({ status: "listed", error: null });
+    expect(same.data).toMatchObject({ listedAt: live.data.listedAt, relistedCount: 0, externalId: "100" });
+
+    // A new id while live is a relist: new clock, count goes up, link replaced.
+    const relisted = await put({ status: "listed", externalId: "200", url: "https://www.vinted.co.uk/items/200" });
+    expect(relisted.data).toMatchObject({ relistedCount: 1, externalId: "200", url: "https://www.vinted.co.uk/items/200" });
+    expect(relisted.data.listedAt!).toBeGreaterThan(live.data.listedAt!);
+
+    // Ended, then listed again: a new clock but not a relist of a live listing.
+    await put({ status: "ended" });
+    const back = await put({ status: "listed", externalId: "300" });
+    expect(back.data.relistedCount).toBe(1);
+    expect(back.data.listedAt!).toBeGreaterThan(relisted.data.listedAt!);
+  });
+
+  it("starts the clock for imported listings and reports stale ones per the settings", async () => {
+    const { token } = await signUp();
+    const imported = await call<ImportResult>("/api/items/import", {
+      token,
+      json: { marketplace: "vinted", listings: [{ externalId: "1", url: "https://www.vinted.co.uk/items/1", item: { title: "Old coat" } }] },
+    });
+    const item = await call<ItemWithListings>(`/api/items/${imported.data.results[0]!.itemId}`, { token });
+    expect(item.data.listings[0]!.listedAt).toBeGreaterThan(0);
+    expect((await call<Stats>("/api/stats", { token })).data.stale).toBe(0);
+
+    const me = await call<{ settings: Record<string, unknown> }>("/api/me/settings", { token, method: "PATCH", json: { vintedRelistDays: 7, ebayRelistDays: 90 } });
+    expect(me.data.settings).toMatchObject({ vintedRelistDays: 7, ebayRelistDays: 90 });
+    expect((await call("/api/me/settings", { token, method: "PATCH", json: { vintedRelistDays: 0 } })).status).toBe(400);
+  });
+});

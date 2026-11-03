@@ -69,6 +69,16 @@ export function Inventory() {
         </p>
       )}
 
+      {s && s.stale > 0 && (
+        <p className="notice">
+          <strong>
+            {s.stale} listing{s.stale === 1 ? " has" : "s have"} been up a while
+          </strong>{" "}
+          (over {settings.vintedRelistDays} days on Vinted or {settings.ebayRelistDays} on eBay). Relisting bumps{" "}
+          {s.stale === 1 ? "it" : "them"} back to the top. <Link to="/relist">Relist</Link>
+        </p>
+      )}
+
       {s && s.duplicates > 0 && (
         <p className="notice">
           <strong>
@@ -137,7 +147,7 @@ export function Inventory() {
                 <strong>{formatMoney(item.price, settings.currency)}</strong>
                 {item.status !== "in_stock" && <StatusBadge status={item.status} />}
               </div>
-              <ListingBadges listings={item.listings} />
+              <ListingBadges listings={item.listings} itemStatus={item.status} settings={settings} />
             </div>
           </Link>
         ))}

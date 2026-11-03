@@ -64,6 +64,10 @@ export function Privacy() {
             of your new listing, which it saves to the item in your inventory.
           </li>
           <li>
+            When you relist an item, it does both: it fills in a new listing for you to publish, then opens the old one
+            so you can delete or end it.
+          </li>
+          <li>
             When you import listings, it reads the listings page you have open on Vinted or eBay to show you what's there,
             and for each listing you pick, it opens that listing to copy its title, description, price, details and
             photos into your inventory. It downloads the photos from Vinted's and eBay's image servers, and eBay

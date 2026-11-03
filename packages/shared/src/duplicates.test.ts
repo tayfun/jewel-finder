@@ -6,7 +6,7 @@ let n = 0;
 function item(fields: Partial<ItemWithListings> & { live?: Marketplace[] }): ItemWithListings {
   const id = fields.id ?? `i${++n}`;
   const listings: Listing[] = (fields.live ?? []).map((m) => ({
-    id: `${id}-${m}`, itemId: id, marketplace: m, status: "listed", externalId: "1", url: null, price: null, error: null, createdAt: 0, updatedAt: 0,
+    id: `${id}-${m}`, itemId: id, marketplace: m, status: "listed", externalId: "1", url: null, price: null, error: null, listedAt: 0, relistedCount: 0, createdAt: 0, updatedAt: 0,
   }));
   return {
     id, sku: "", title: "", description: "", brand: "", category: "", size: "", colour: "", condition: null, price: null, cost: null,

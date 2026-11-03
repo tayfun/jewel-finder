@@ -62,16 +62,20 @@ export async function run(adapter: Adapter): Promise<void> {
     return; // signed out or API unreachable; nothing to do on this page
   }
   if (!ctx || ctx.job.marketplace !== adapter.marketplace) return;
-  if (ctx.job.kind === "delist") return runDelist(adapter, ctx);
+  if (ctx.job.kind === "delist" || ctx.job.kind === "cleanup") return runDelist(adapter, ctx);
   const job = ctx;
-  const title = `${MARKETPLACE_LABELS[adapter.marketplace]}: ${job.item.title}`;
+  const relist = ctx.job.kind === "relist";
+  const title = `${relist ? "Relist on " : ""}${MARKETPLACE_LABELS[adapter.marketplace]}: ${job.item.title}`;
   let finished = false;
   let handledHref = "";
 
-  setCancelHandler(() => {
-    finished = true;
-    void send({ type: "JOB_CANCEL" });
-  });
+  setCancelHandler(
+    () => {
+      finished = true;
+      void send({ type: "JOB_CANCEL" });
+    },
+    relist ? "Cancel relisting (keeps the old listing)" : "Cancel this listing",
+  );
 
   async function handle() {
     if (finished || location.href === handledHref) return;
@@ -83,9 +87,14 @@ export async function run(adapter: Adapter): Promise<void> {
       if (published) {
         finished = true;
         try {
-          await send({ type: "JOB_PUBLISHED", ...published });
+          const { next } = await send({ type: "JOB_PUBLISHED", ...published });
           sessionStorage.removeItem(filledKey(job));
-          showBanner({ kind: "done", title, message: "Listed! Saved to your Jewel Finder inventory." });
+          if (next) {
+            showBanner({ kind: "working", title, message: "Relisted! Now opening the old listing to remove it…" });
+            setTimeout(() => location.assign(next), 1500);
+          } else {
+            showBanner({ kind: "done", title, message: "Listed! Saved to your Jewel Finder inventory." });
+          }
         } catch (e) {
           showBanner({ kind: "error", title, message: `Listed, but couldn't update Jewel Finder: ${(e as Error).message}` });
         }
@@ -122,16 +131,21 @@ const delistKey = (ctx: JobContext) => `jewel-finder.delist.${ctx.job.itemId}.${
 
 /** Cross-delisting: walk the seller through ending the listing, then mark it ended in Jewel Finder. */
 async function runDelist(adapter: Adapter, ctx: JobContext): Promise<void> {
-  const title = `End on ${MARKETPLACE_LABELS[adapter.marketplace]}: ${ctx.item.title}`;
+  const cleanup = ctx.job.kind === "cleanup";
+  const site = MARKETPLACE_LABELS[adapter.marketplace];
+  const title = cleanup ? `Remove old ${site} listing: ${ctx.item.title}` : `End on ${site}: ${ctx.item.title}`;
   let finished = false;
   let busy = false;
   let handledHref = "";
 
-  setCancelHandler(() => {
-    finished = true;
-    sessionStorage.removeItem(delistKey(ctx));
-    void send({ type: "JOB_CANCEL" });
-  });
+  setCancelHandler(
+    () => {
+      finished = true;
+      sessionStorage.removeItem(delistKey(ctx));
+      void send({ type: "JOB_CANCEL" });
+    },
+    cleanup ? "Leave the old listing up" : "Don't end it now",
+  );
 
   async function handle() {
     if (finished || busy || location.href === handledHref) return;
@@ -143,7 +157,13 @@ async function runDelist(adapter: Adapter, ctx: JobContext): Promise<void> {
         sessionStorage.removeItem(delistKey(ctx));
         try {
           await send({ type: "JOB_DELISTED" });
-          showBanner({ kind: "done", title, message: "Listing ended and marked as ended in Jewel Finder." });
+          showBanner({
+            kind: "done",
+            title,
+            message: cleanup
+              ? "Relisted: the old listing is gone, and Jewel Finder has the new one."
+              : "Listing ended and marked as ended in Jewel Finder.",
+          });
         } catch (e) {
           showBanner({ kind: "error", title, message: `Ended, but couldn't update Jewel Finder: ${(e as Error).message}` });
         }

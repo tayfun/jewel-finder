@@ -6,6 +6,7 @@ import {
   MARKETPLACE_LABELS,
   Settings,
   findDuplicatePairs,
+  isStale,
   pairKey,
   type DuplicatePair,
   type Account,
@@ -76,6 +77,10 @@ const MIGRATIONS = [
   `CREATE INDEX listings_external ON listings(marketplace, external_id);`,
   // v5: pairs the seller said aren't duplicates (a < b).
   `CREATE TABLE not_duplicates (a TEXT NOT NULL, b TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (a, b));`,
+  // v6: when each listing went live, and how often it was relisted. Live ones: last change is our best guess.
+  `ALTER TABLE listings ADD COLUMN listed_at INTEGER;
+   ALTER TABLE listings ADD COLUMN relisted_count INTEGER NOT NULL DEFAULT 0;
+   UPDATE listings SET listed_at = updated_at WHERE status = 'listed';`,
 ];
 
 type Row = Record<string, SqlStorageValue>;
@@ -116,6 +121,8 @@ function toListing(r: Row): Listing {
     url: (r.url as string | null) ?? null,
     price: (r.price as number | null) ?? null,
     error: (r.error as string | null) ?? null,
+    listedAt: (r.listed_at as number | null) ?? null,
+    relistedCount: (r.relisted_count as number | null) ?? 0,
     createdAt: r.created_at as number,
     updatedAt: r.updated_at as number,
   };
@@ -369,9 +376,19 @@ class AccountDOBase extends DurableObject<Env> {
     const now = Date.now();
     const db = this.db();
     db.exec(
-      `INSERT INTO listings (id, item_id, marketplace, status, external_id, url, price, error, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      // Going live, or live under a new id (relisted), restarts the clock; a new id on a live listing
+      // counts as a relist.
+      `INSERT INTO listings (id, item_id, marketplace, status, external_id, url, price, error, listed_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (item_id, marketplace) DO UPDATE SET
+         listed_at = CASE
+           WHEN excluded.status = 'listed' AND (listings.status != 'listed' OR listings.listed_at IS NULL
+             OR (excluded.external_id IS NOT NULL AND excluded.external_id IS NOT listings.external_id))
+           THEN excluded.updated_at ELSE listings.listed_at END,
+         relisted_count = listings.relisted_count + CASE
+           WHEN excluded.status = 'listed' AND listings.status = 'listed' AND listings.external_id IS NOT NULL
+             AND excluded.external_id IS NOT NULL AND excluded.external_id != listings.external_id
+           THEN 1 ELSE 0 END,
          status = excluded.status,
          external_id = COALESCE(excluded.external_id, listings.external_id),
          url = COALESCE(excluded.url, listings.url),
@@ -386,6 +403,7 @@ class AccountDOBase extends DurableObject<Env> {
       input.url ?? null,
       input.price ?? null,
       input.error ?? null,
+      input.status === "listed" ? now : null,
       now,
       now,
     );
@@ -432,8 +450,8 @@ class AccountDOBase extends DurableObject<Env> {
         const itemId = this.insertItem(l.item);
         const now = Date.now();
         db.exec(
-          `INSERT INTO listings (id, item_id, marketplace, status, external_id, url, price, error, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+          `INSERT INTO listings (id, item_id, marketplace, status, external_id, url, price, error, listed_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
           crypto.randomUUID(),
           itemId,
           marketplace,
@@ -441,6 +459,8 @@ class AccountDOBase extends DurableObject<Env> {
           l.externalId,
           l.url,
           l.item.price,
+          // We can't tell how long it has been up on the marketplace, so the clock starts now.
+          l.state === "listed" ? now : null,
           now,
           now,
         );
@@ -457,14 +477,14 @@ class AccountDOBase extends DurableObject<Env> {
   // ------------------------------------------------------------- duplicates
 
   /** Likely duplicate pairs, best first; only those involving `itemId` when given. */
-  async findDuplicates(itemId?: string): Promise<DuplicatePair[]> {
+  async findDuplicates(itemId?: string, items?: ItemWithListings[]): Promise<DuplicatePair[]> {
     const dismissed = new Set(
       this.db()
         .exec<{ a: string; b: string }>("SELECT a, b FROM not_duplicates")
         .toArray()
         .map((r) => pairKey(r.a, r.b)),
     );
-    return findDuplicatePairs(await this.listItems(), dismissed, itemId ? new Set([itemId]) : undefined);
+    return findDuplicatePairs(items ?? (await this.listItems()), dismissed, itemId ? new Set([itemId]) : undefined);
   }
 
   async dismissDuplicate(a: string, b: string): Promise<void> {
@@ -569,8 +589,12 @@ class AccountDOBase extends DurableObject<Env> {
       )
       .one();
     const toEnd = db.exec<{ n: number }>("SELECT COUNT(*) AS n FROM listings WHERE status = 'ending'").one().n;
-    const duplicates = (await this.findDuplicates()).length;
-    return { byStatus, listed, stockValue: value.v ?? 0, stockCost: value.c ?? 0, toEnd, duplicates };
+    const items = await this.listItems();
+    const duplicates = (await this.findDuplicates(undefined, items)).length;
+    const settings = this.getAccount()?.settings ?? Settings.parse({});
+    const now = Date.now();
+    const stale = items.reduce((n, item) => n + item.listings.filter((l) => isStale(item, l, settings, now)).length, 0);
+    return { byStatus, listed, stockValue: value.v ?? 0, stockCost: value.c ?? 0, toEnd, duplicates, stale };
   }
 }
 

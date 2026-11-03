@@ -53,12 +53,17 @@ export function delistViaExtension(itemId: string, marketplace: Marketplace): Pr
   return request("DELIST_ITEM", itemId, marketplace);
 }
 
+/** Asks the extension to list the item again as a new listing, then remove the old one (bump to the top). */
+export function relistViaExtension(itemId: string, marketplace: Marketplace): Promise<void> {
+  return request("RELIST_ITEM", itemId, marketplace);
+}
+
 /** Asks the extension to open the seller's listings on a marketplace, ready to pick what to import. */
 export function importViaExtension(marketplace: Marketplace): Promise<void> {
   return request("IMPORT_LISTINGS", "", marketplace);
 }
 
-function request(type: "LIST_ITEM" | "DELIST_ITEM" | "IMPORT_LISTINGS", itemId: string, marketplace: Marketplace): Promise<void> {
+function request(type: "LIST_ITEM" | "DELIST_ITEM" | "RELIST_ITEM" | "IMPORT_LISTINGS", itemId: string, marketplace: Marketplace): Promise<void> {
   const requestId = crypto.randomUUID();
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {

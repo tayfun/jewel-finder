@@ -171,7 +171,9 @@ async function fillSpecific(spec: FieldSpec, value: string): Promise<boolean> {
   return true;
 }
 
-const listingOf = (ctx: JobContext) => ctx.item.listings.find((l) => l.marketplace === "ebay");
+/** The listing to end: a relist's old one, otherwise the item's listing here. */
+const targetOf = (ctx: JobContext): { externalId: string | null; url: string | null } | undefined =>
+  ctx.job.target ?? ctx.item.listings.find((l) => l.marketplace === "ebay");
 const ENDED = /(listing|item) (has been|was|is now) ended|you('ve| have) ended|ended successfully|this listing (has|was) ended|seller ended this listing/;
 
 /** Item specifics: "Brand" → "Levi's". eBay renders them as .ux-labels-values rows. */
@@ -279,8 +281,8 @@ export const ebay: Adapter = {
   // Item page → "End listing" → reason page. The seller presses eBay's final "End listing".
   delist: {
     async step(ctx) {
-      const id = listingOf(ctx)?.externalId;
-      const after = "Jewel Finder marks it ended once it's done.";
+      const id = targetOf(ctx)?.externalId;
+      const after = "Jewel Finder updates your inventory once it's done.";
       const text = normalize(document.body?.innerText ?? document.body?.textContent);
       const onEndPage =
         /EndingMyAuction|\/end(listing)?\b/i.test(location.href) ||
@@ -306,7 +308,7 @@ export const ebay: Adapter = {
 
     async isDone(ctx, _url, doc) {
       if (ENDED.test(normalize(doc.body?.innerText ?? doc.body?.textContent))) return true;
-      const id = listingOf(ctx)?.externalId;
+      const id = targetOf(ctx)?.externalId;
       if (!id) return false;
       // Double-check on the item page itself, which says when the seller ended it.
       try {

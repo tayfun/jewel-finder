@@ -37,6 +37,7 @@ const CSS = `
 let host: HTMLElement | null = null;
 let root: ShadowRoot;
 let onCancel: () => void = () => {};
+let cancelLabel = "Cancel this listing";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, ...kids: (Node | string)[]) {
   const node = document.createElement(tag);
@@ -45,8 +46,10 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string,
   return node;
 }
 
-export function setCancelHandler(fn: () => void) {
+/** What the footer's cancel button does, and what it says. */
+export function setCancelHandler(fn: () => void, label = "Cancel this listing") {
   onCancel = fn;
+  cancelLabel = label;
 }
 
 export function showBanner(state: BannerState) {
@@ -90,7 +93,7 @@ export function showBanner(state: BannerState) {
   box.append(body);
 
   if (state.kind !== "done") {
-    const cancel = el("button", {}, "Cancel this listing");
+    const cancel = el("button", {}, cancelLabel);
     cancel.onclick = () => {
       onCancel();
       hideBanner();

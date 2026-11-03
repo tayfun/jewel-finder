@@ -3,6 +3,8 @@ import {
   MARKETPLACE_LABELS,
   formatMoney,
   imageUrl,
+  isStale,
+  listingAgeDays,
   type Account,
   type ItemStatus,
   type ItemWithListings,
@@ -69,6 +71,21 @@ async function startImport(marketplace: Marketplace) {
     const host = tab?.url ? new URL(tab.url).hostname : "";
     const here = marketplace === "vinted" ? /(^|\.)vinted\./.test(host) : /(^|\.)ebay\./.test(host);
     await send({ type: "START_IMPORT", marketplace, tabId: here ? tab?.id : undefined });
+  } catch (e) {
+    error = (e as Error).message;
+  } finally {
+    busy = "";
+    render();
+  }
+}
+
+/** Bump a stale listing: list it again from the inventory, then remove the old one. */
+async function relist(item: ItemWithListings, marketplace: Marketplace) {
+  busy = `${item.id}:${marketplace}`;
+  error = "";
+  render();
+  try {
+    await send({ type: "START_RELISTING", itemId: item.id, marketplace });
   } catch (e) {
     error = (e as Error).message;
   } finally {
@@ -149,8 +166,25 @@ function renderItem(item: ItemWithListings) {
         ...MARKETPLACES.map((m) => {
           const l = byMarket.get(m);
           if (l?.status === "listed" || l?.status === "sold") {
-            const badge = h("span", { class: `badge ${m}` }, `${MARKETPLACE_LABELS[m]}${l.status === "sold" ? " · sold" : ""}`);
-            return l.url ? h("a", { href: l.url, target: "_blank" }, badge) : badge;
+            const stale = account ? isStale(item, l, account.settings) : false;
+            const label = `${MARKETPLACE_LABELS[m]}${l.status === "sold" ? " · sold" : stale ? ` · ${listingAgeDays(l)}d` : ""}`;
+            const badge = h("span", { class: `badge ${m}${stale ? " stale" : ""}`, title: stale ? "Up for a while: relist to bump it" : "" }, label);
+            const link = l.url ? h("a", { href: l.url, target: "_blank" }, badge) : badge;
+            if (!stale || !l.url) return link;
+            return h(
+              "span",
+              { class: "row" },
+              link,
+              h(
+                "button",
+                {
+                  disabled: !!busy || !item.images.length,
+                  title: `List it again on ${MARKETPLACE_LABELS[m]} and remove the old listing, to bump it to the top`,
+                  onClick: () => relist(item, m),
+                },
+                busy === `${item.id}:${m}` ? "Opening…" : "↻ Relist",
+              ),
+            );
           }
           const key = `${item.id}:${m}`;
           return h(

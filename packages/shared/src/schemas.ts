@@ -141,6 +141,10 @@ export interface Listing {
   url: string | null;
   price: number | null;
   error: string | null;
+  /** When it last went live (published, imported, or relisted). */
+  listedAt: number | null;
+  /** Times it was taken down and put up again as a new listing. */
+  relistedCount: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -159,6 +163,9 @@ export const Settings = z.object({
     .string()
     .regex(/^www\.ebay\.[a-z.]+$/, "Must look like www.ebay.co.uk")
     .default("www.ebay.co.uk"),
+  /** A live listing older than this many days is stale: relisting bumps it back to the top. */
+  vintedRelistDays: z.int("Enter a whole number of days").min(1).max(365).default(21),
+  ebayRelistDays: z.int("Enter a whole number of days").min(1).max(365).default(60),
 });
 export type Settings = z.infer<typeof Settings>;
 export const SettingsPatch = z.object(Settings.shape).partial();
@@ -192,6 +199,8 @@ export interface Stats {
   toEnd: number;
   /** Pairs of items that look like the same thing entered twice (see /api/duplicates). */
   duplicates: number;
+  /** Live listings older than the seller's relist interval. */
+  stale: number;
 }
 
 export interface ApiError {

@@ -1,8 +1,13 @@
 import type { Account, Condition, ImportState, ItemStatus, ItemWithListings, Marketplace, Settings } from "@jf/shared";
 
 export interface Job {
-  /** "list" fills in a new listing; "delist" ends a live one. Missing on jobs from older builds = "list". */
-  kind?: "list" | "delist";
+  /**
+   * "list" fills in a new listing; "delist" ends a live one. "relist" fills in a new listing to replace
+   * a live one (a bump), then becomes "cleanup", which ends the old one. Missing (older builds) = "list".
+   */
+  kind?: "list" | "delist" | "relist" | "cleanup";
+  /** relist / cleanup: the listing being replaced. */
+  target?: { externalId: string | null; url: string | null };
   itemId: string;
   marketplace: Marketplace;
   startedAt: number;
@@ -63,6 +68,7 @@ export type Request =
   | { type: "LIST_ITEMS"; q?: string; status?: ItemStatus }
   | { type: "START_LISTING"; itemId: string; marketplace: Marketplace; token?: string }
   | { type: "START_DELISTING"; itemId: string; marketplace: Marketplace; token?: string }
+  | { type: "START_RELISTING"; itemId: string; marketplace: Marketplace; token?: string }
   | { type: "GET_JOB" }
   | { type: "GET_IMAGES" }
   | { type: "JOB_PUBLISHED"; url: string; externalId: string }
@@ -86,9 +92,11 @@ export interface Responses {
   LIST_ITEMS: { items: ItemWithListings[] };
   START_LISTING: { tabId: number };
   START_DELISTING: { tabId: number };
+  START_RELISTING: { tabId: number };
   GET_JOB: JobContext | null;
   GET_IMAGES: ImageFile[];
-  JOB_PUBLISHED: null;
+  /** next: a relist's old listing, which the tab opens next to end it. */
+  JOB_PUBLISHED: { next: string | null };
   JOB_DELISTED: null;
   JOB_CANCEL: null;
   START_IMPORT: { tabId: number };

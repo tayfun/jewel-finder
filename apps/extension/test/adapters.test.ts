@@ -35,7 +35,7 @@ const item: ItemWithListings = {
 const ctx = (marketplace: "vinted" | "ebay"): JobContext => ({
   job: { itemId: item.id, marketplace, startedAt: 0 },
   item,
-  settings: { currency: "GBP", vintedDomain: "www.vinted.co.uk", ebayDomain: "www.ebay.co.uk" } satisfies Settings,
+  settings: { currency: "GBP", vintedDomain: "www.vinted.co.uk", ebayDomain: "www.ebay.co.uk", vintedRelistDays: 21, ebayRelistDays: 60 } satisfies Settings,
 });
 const photo = () => new File(["x"], "photo-1.jpg", { type: "image/jpeg" });
 
@@ -229,6 +229,38 @@ describe("cross-delisting", () => {
 
     document.body.innerHTML = `<h1>Your listing has been ended</h1>`;
     expect(await ebay.delist.isDone(job, new URL("https://www.ebay.co.uk/sh/lst/ended"), document)).toBe(true);
+  });
+
+  // Relist cleanup: the item's listing already points at the new one; the old one is the target.
+  const cleanup = (marketplace: "vinted" | "ebay", oldId: string, oldUrl: string, newId: string, newUrl: string): JobContext => {
+    const c = listed(marketplace, newId, newUrl);
+    c.item.listings[0]!.status = "listed";
+    return { ...c, job: { ...c.job, kind: "cleanup", target: { externalId: oldId, url: oldUrl } } };
+  };
+
+  it("vinted relist: deletes the old listing, not the new one", async () => {
+    const job = cleanup("vinted", "123", "https://www.vinted.co.uk/items/123-levis", "456", "https://www.vinted.co.uk/items/456-levis");
+    setUrl("https://www.vinted.co.uk/items/456-levis");
+    document.body.innerHTML = `<button>Delete</button>`;
+    expect(await vinted.delist.step(job)).toMatch(/^Open the listing \(https:\/\/www\.vinted\.co\.uk\/items\/123-levis\)/);
+
+    setUrl("https://www.vinted.co.uk/items/123-levis");
+    document.body.innerHTML = `<button>Delete</button>`;
+    document.querySelector("button")!.addEventListener("click", () => {
+      document.body.insertAdjacentHTML("beforeend", `<div role="dialog"><button>Confirm and delete</button></div>`);
+    });
+    expect(await vinted.delist.step(job)).toMatch(/Press “Confirm and delete”/);
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 404 }));
+    expect(await vinted.delist.isDone(job, new URL("https://www.vinted.co.uk/member/42"), document)).toBe(true);
+    expect(String(fetch.mock.calls[0]![0])).toBe("/items/123-levis");
+  });
+
+  it("ebay relist: ends the old item number", async () => {
+    const job = cleanup("ebay", "111111111111", "https://www.ebay.co.uk/itm/111111111111", "222222222222", "https://www.ebay.co.uk/itm/222222222222");
+    document.body.innerHTML = `<h1>Seller Hub</h1>`;
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(`<html><body><p>This listing was ended by the seller.</p></body></html>`));
+    expect(await ebay.delist.isDone(job, new URL("https://www.ebay.co.uk/sh/lst/active"), document)).toBe(true);
+    expect(String(fetch.mock.calls[0]![0])).toBe("/itm/111111111111");
   });
 
   it("ebay: ignores 'ended' text that only appears in scripts", async () => {

@@ -173,6 +173,29 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
     return { tabId: tab.id };
   },
 
+  // Bump: put the item up again as a new listing, then end the old one in the same tab.
+  async START_RELISTING({ itemId, marketplace, token }) {
+    if (token) await adoptToken(token);
+    const auth = await getAuth();
+    if (!auth) throw new Error("Sign in to the Jewel Finder extension first");
+    const item = await api<ItemWithListings>(`/api/items/${itemId}`);
+    const site = MARKETPLACE_LABELS[marketplace];
+    const listing = item.listings.find((l) => l.marketplace === marketplace);
+    if (listing?.status !== "listed") throw new Error(`This item isn't live on ${site}, so there's nothing to relist`);
+    if (!listing.url) throw new Error(`No ${site} link saved for this listing, so the old one can't be removed. Add the link, or list it again by hand.`);
+    if (!item.images.length) throw new Error("Add at least one photo before relisting");
+    const tab = await chrome.tabs.create({ url: sellUrl(marketplace, auth.account.settings, item.title) });
+    if (tab.id == null) throw new Error("Couldn't open a tab");
+    await setJob(tab.id, {
+      kind: "relist",
+      itemId,
+      marketplace,
+      startedAt: Date.now(),
+      target: { externalId: listing.externalId, url: listing.url },
+    });
+    return { tabId: tab.id };
+  },
+
   async GET_JOB(_req, sender) {
     const job = await jobFor(sender);
     const auth = await getAuth();
@@ -200,18 +223,40 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
 
   async JOB_PUBLISHED({ url, externalId }, sender) {
     const job = await jobFor(sender);
-    if (!job) return null;
+    if (!job) return { next: null };
+    const old = job.kind === "relist" ? job.target : undefined;
+    const replacing = Boolean(old?.url && old.externalId !== externalId);
     await api(`/api/items/${job.itemId}/listings/${job.marketplace}`, {
       method: "PUT",
-      json: { status: "listed", url, externalId, error: null },
+      json: {
+        status: "listed",
+        url,
+        externalId,
+        // Cleared once the old one is gone; stays visible if the seller stops halfway.
+        error: replacing ? `Previous listing still live: ${old!.url}. Delete it so the item can't sell twice.`.slice(0, 500) : null,
+      },
     });
+    if (replacing) {
+      await setJob(tabOf(sender), { ...job, kind: "cleanup", startedAt: Date.now() });
+      return { next: old!.url };
+    }
     await setJob(tabOf(sender), null);
-    return null;
+    return { next: null };
   },
 
   async JOB_DELISTED(_req, sender) {
     const job = await jobFor(sender);
     if (!job) return null;
+    if (job.kind === "cleanup") {
+      // The old listing of a relist is gone; the new one stays as it is.
+      const item = await api<ItemWithListings>(`/api/items/${job.itemId}`);
+      const current = item.listings.find((l) => l.marketplace === job.marketplace);
+      if (current) {
+        await api(`/api/items/${job.itemId}/listings/${job.marketplace}`, { method: "PUT", json: { status: current.status, error: null } });
+      }
+      await setJob(tabOf(sender), null);
+      return null;
+    }
     await api(`/api/items/${job.itemId}/listings/${job.marketplace}`, {
       method: "PUT",
       json: { status: "ended", error: null },
@@ -224,7 +269,8 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
     const job = await jobFor(sender);
     if (!job) return null;
     await setJob(tabOf(sender), null);
-    if (job.kind === "delist") return null; // the listing stays flagged for ending
+    // Delist: stays flagged for ending. Relist/cleanup: the live listing stays as it is.
+    if (job.kind && job.kind !== "list") return null;
     const item = await api<ItemWithListings>(`/api/items/${job.itemId}`);
     if (item.listings.find((l) => l.marketplace === job.marketplace)?.status === "pending") {
       await api(`/api/items/${job.itemId}/listings/${job.marketplace}`, { method: "DELETE" });

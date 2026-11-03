@@ -76,7 +76,9 @@ function selectPackageSize(size: VintedPackageSize): boolean {
   return true;
 }
 
-const listingOf = (ctx: JobContext) => ctx.item.listings.find((l) => l.marketplace === "vinted");
+/** The listing to end: a relist's old one, otherwise the item's listing here. */
+const targetOf = (ctx: JobContext): { externalId: string | null; url: string | null } | undefined =>
+  ctx.job.target ?? ctx.item.listings.find((l) => l.marketplace === "vinted");
 
 /** The signed-in member's own profile link in Vinted's header, e.g. /member/123-name. */
 function ownProfileLink(doc: Document): HTMLAnchorElement | null {
@@ -167,8 +169,8 @@ export const vinted: Adapter = {
   // Own item page → "Delete" → confirmation dialog. The seller presses the final confirm.
   delist: {
     async step(ctx) {
-      const listing = listingOf(ctx);
-      const after = "Jewel Finder marks it ended once it's gone.";
+      const listing = targetOf(ctx);
+      const after = "Jewel Finder updates your inventory once it's gone.";
       if (parseListingUrl("vinted", location.href)?.externalId !== listing?.externalId) {
         return `Open the listing (${listing?.url ?? "on Vinted"}) and delete it. ${after}`;
       }
@@ -187,7 +189,7 @@ export const vinted: Adapter = {
     },
 
     async isDone(ctx, url) {
-      const listing = listingOf(ctx);
+      const listing = targetOf(ctx);
       if (!listing?.url || !listing.externalId) return false;
       if (parseListingUrl("vinted", url.href)?.externalId === listing.externalId) return false;
       // Vinted leaves the item page after deleting; make sure the item really is gone.

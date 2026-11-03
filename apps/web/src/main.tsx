@@ -12,6 +12,7 @@ import { EditItem, NewItem } from "./pages/ItemEditor";
 import { Extension } from "./pages/Extension";
 import { Duplicates } from "./pages/Duplicates";
 import { Import } from "./pages/Import";
+import { Relist } from "./pages/Relist";
 import { Privacy } from "./pages/Privacy";
 import { Settings } from "./pages/Settings";
 import "./styles.css";
@@ -37,6 +38,7 @@ const router = createRouter([
       { path: "/extension", element: <Extension /> },
       { path: "/import", element: <Import /> },
       { path: "/duplicates", element: <Duplicates /> },
+      { path: "/relist", element: <Relist /> },
     ],
   },
     ],
