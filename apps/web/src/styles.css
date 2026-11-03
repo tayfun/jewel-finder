@@ -442,3 +442,9 @@ label.checkbox input { width: 1rem; }
 
 .install-steps { padding-left: 1.25rem; display: grid; gap: 0.6rem; margin: 0.75rem 0 1rem; }
 .install-steps li::marker { color: var(--muted); }
+
+.legal { max-width: 46rem; margin: 0 auto; padding: 2rem 1rem 3rem; line-height: 1.65; }
+.legal h1 { margin-bottom: 0.25rem; }
+.legal h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; }
+.legal ul { padding-left: 1.25rem; display: grid; gap: 0.4rem; }
+.footer-links { display: inline-flex; gap: 1rem; }

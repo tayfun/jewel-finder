@@ -19,6 +19,9 @@ export function Extension() {
             back to the item.
           </p>
           <p className="muted small">Works in Chrome, Edge, Brave and other Chromium browsers on a computer.</p>
+          <p className="muted small">
+            It only runs on Vinted, eBay and Jewel Finder. See the <Link to="/privacy">privacy policy</Link>.
+          </p>
         </section>
 
         <section className="card">

@@ -138,6 +138,9 @@ export function Signup() {
           <p className="muted small center">
             Already have an account? <Link to="/login">Sign in</Link>
           </p>
+          <p className="muted small center">
+            By signing up you agree to how we handle your data in our <Link to="/privacy">privacy policy</Link>.
+          </p>
         </form>
       </main>
     </div>

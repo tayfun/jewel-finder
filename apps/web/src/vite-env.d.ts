@@ -6,4 +6,6 @@ interface ImportMetaEnv {
   readonly VITE_SENTRY_ENVIRONMENT?: string;
   /** Chrome Web Store URL of the extension. Unset = offer the zip for a manual install. */
   readonly VITE_EXTENSION_URL?: string;
+  /** Email shown on the privacy policy for data requests. */
+  readonly VITE_CONTACT_EMAIL?: string;
 }

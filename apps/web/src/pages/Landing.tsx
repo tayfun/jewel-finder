@@ -143,7 +143,10 @@ export function Landing() {
 
       <footer className="landing-footer muted small">
         <span>© {new Date().getFullYear()} Jewel Finder</span>
-        <Link to="/login">Sign in</Link>
+        <span className="footer-links">
+          <Link to="/privacy">Privacy</Link>
+          <Link to="/login">Sign in</Link>
+        </span>
       </footer>
     </div>
   );

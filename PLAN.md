@@ -39,6 +39,9 @@ own "sell an item" form (no marketplace APIs — Vinted has none, and we don't w
 | AI listing data | Gemini (`@google/genai`, model in `GEMINI_MODEL`, default `gemini-3.8-flash`, falling back to `GEMINI_FALLBACK_MODEL` (`gemini-3.5-flash`) on 429/503/504) called from the Worker with the item's photos and a `responseJsonSchema`; the result is validated (zod + ISBN check digit) and shown for review before anything is saved | Key stays server-side; structured output; the seller stays in control of what gets written |
 | Monitoring | Sentry: `@sentry/cloudflare` (`withSentry`, Hono middleware, Durable Object wrapper, Gemini spans) and `@sentry/react` (router tracing, error boundary, route errors); traces propagate browser → Worker | Errors and slow requests visible end to end; DSN-less environments send nothing; only the account id is attached. `scripts/deploy.mjs` uploads source maps (debug IDs) for both, and deploys the exact Worker bundle it uploaded maps for |
 | Web → extension | A bridge content script on the web app origin relays `window.postMessage` requests to the background worker | No need to hard-code the extension id in the web app |
+| Extension builds | `dist/` ("Jewel Finder (dev)", localhost) and `dist-prod/` (deployed Worker) match different hosts, so both can be loaded side by side; `pnpm release:ext` zips `dist-prod/` | Accounts live on one server; the side panel shows which one it signs in to |
+| Extension distribution | Chrome Web Store once approved (`VITE_EXTENSION_URL` → "Add to Chrome"); until then `/extension` offers the zip, which the deploy serves at `/jewel-finder-extension.zip` | Every "not detected" message has somewhere to send the seller |
+| Privacy | Public `/privacy` page covering the web app and extension (Web Store requirement); contact address from `VITE_CONTACT_EMAIL` | Required for the store listing; describes only what the code actually does |
 
 ## 2. Data model (per-user SQLite inside `AccountDO`)
 
@@ -70,6 +73,7 @@ POST   /api/items              ItemInput                   → item
 GET    /api/items/:id                                      → item (+ listings)
 PATCH  /api/items/:id          partial ItemInput           → item
 DELETE /api/items/:id                                      → 204
+POST   /api/items/:id/duplicate                            → item   (photos copied, quantity ≥ 1)
 POST   /api/items/:id/sold     {marketplace?}              → item   (marks other listings ended)
 POST   /api/items/:id/autofill                          → {suggestion} (Gemini, not saved)
 PUT    /api/items/:id/listings/:marketplace  ListingInput  → listing (upsert)
@@ -88,9 +92,12 @@ GET    /images/:key                                        → image bytes (publ
    page (`https://<vintedDomain>/items/new`, `https://<ebayDomain>/sl/prelist/suggest`), and stores a
    job `{tabId → itemId, marketplace}` in `chrome.storage.session`.
 4. Marketplace content script asks the background for its job, then fills what it can:
-   photos (via `DataTransfer` on the file input), title, description, price, and best-effort
-   brand/size/condition. React-controlled inputs are set with the native value setter + `input` events.
-   A banner tells the user what was filled and what still needs attention.
+   photos (via `DataTransfer` on the file input), title, description, price, package size, and
+   best-effort brand/size/condition. React-controlled inputs are set with the native value setter +
+   `input` events; eBay's description goes into its rich-text iframe via `execCommand` (the textarea
+   beside it is only for "Show HTML code"). eBay's package size is chosen in the Delivery picker;
+   Vinted's parcel size appears only after a category is picked, so the script waits for it.
+   The side panel lists what was filled and what still needs doing by hand, with values to copy.
 5. When the page navigates to a published listing URL, the content script reports
    `{url, externalId}` → background → `PUT /api/items/:id/listings/:marketplace {status: listed}`.
 
@@ -99,16 +106,18 @@ Selectors live in one adapter file per marketplace with multiple fallback strate
 
 ## 5. Implementation steps
 
-Status (2026-11-02): steps 1–5 are implemented. Tests: shared 6, API 7 (in workerd), extension 12
+Status (2026-11-03): steps 1–5 are implemented and deployed, along with AI auto-fill, Sentry, package
+sizes, the extension install page and the privacy policy. Tests: shared 10, API 16 (in workerd), extension 14
 (happy-dom, incl. a real React-controlled form). The web app was exercised end to end in a browser.
-**Not yet verified against the live Vinted/eBay sites** — the content-script selectors are
-best-effort and need checking with a real seller account (see section 9).
+Live marketplace checks so far: one eBay listing was tried with the production extension; the
+description fix was built from the real eBay form. Still unverified live: eBay's package size picker (only its summary button was
+seen), and the whole Vinted flow (see section 9).
 
 1. **Scaffold** — pnpm workspace, root tsconfig, `packages/shared` (zod schemas, types, money
    helpers, marketplace constants & URL builders).
 2. **Backend** — Worker + Hono routes, `AccountDO` with SQLite migrations and RPC methods, JWT +
    PBKDF2 auth, R2 image upload/serve, CORS for the extension, static-asset fallback to the SPA.
-   Tests with `@cloudflare/vitest-pool-workers`.
+   Tests with `@cloudflare/vitest-plugin` (in workerd).
 3. **Web app** — Vite + React + React Router: landing page, separate sign-in and sign-up pages, inventory grid with search/filter,
    dashboard stats, item create/edit with photo upload, item page with per-marketplace listing
    status and actions (list via extension, mark listed manually, mark sold, archive, delete,
@@ -128,9 +137,10 @@ pnpm build:ext      # → apps/extension/dist, load unpacked in chrome://extensi
 pnpm test
 ```
 
-Deploy: `pnpm run deploy` (builds the web app, then `wrangler deploy` with it as static assets).
-Set the secret first: `wrangler secret put JWT_SECRET`. Build the extension against production
-with `pnpm build:ext:prod` (→ `dist-prod/`; `API_URL=… pnpm build:ext` for another deployment).
+Deploy: `pnpm run deploy` builds the web app, zips the production extension into its assets, bundles
+the Worker, uploads source maps to Sentry (when configured) and runs `wrangler deploy`. Secrets first:
+`JWT_SECRET`, `GEMINI_API_KEY`, `SENTRY_DSN` (see README). Build the extension against production with
+`pnpm build:ext:prod` (→ `dist-prod/`), or `pnpm release:ext` for the Web Store zip.
 
 ## 7. Product roadmap (promised on the landing page, not built yet)
 
@@ -163,11 +173,19 @@ with `pnpm build:ext:prod` (→ `dist-prod/`; `API_URL=… pnpm build:ext` for a
 - Email verification, password reset, email change (needs an email→account index).
 - Image editing (crop/rotate/background removal), signed/private image URLs.
 - Category/size mapping tables per marketplace for fuller auto-fill.
+- Self-serve account deletion and data export in Settings (the privacy policy currently says "email us").
+- Sentry in the extension (errors from content scripts on live marketplace pages).
 
 ## 9. Next up
 
-1. Load the extension against live Vinted and eBay with a seller account; adjust selectors in
-   `apps/extension/src/content/{vinted,ebay}.ts` and add fixtures captured from the real pages to the tests.
-2. Rate-limit `/api/auth/*` (Workers Rate Limiting binding).
-3. Cross-delisting when an item sells (section 8).
-4. Imports, then relist/bump (section 7).
+1. **Publish the extension**: set `VITE_CONTACT_EMAIL`; check the Gemini API tier matches the privacy
+   policy (on the free tier Google may use inputs to improve its products); name the legal entity on
+   `/privacy`; take 1280×800 screenshots; submit to the Chrome Web Store (listing text drafted), then set
+   `VITE_EXTENSION_URL` and redeploy.
+2. **Live marketplace checks**: list a real item on Vinted and eBay. Capture eBay's package size picker
+   and Vinted's form (category, brand, condition, parcel size) and turn them into test fixtures; adjust
+   `apps/extension/src/content/{vinted,ebay}.ts` where selectors miss.
+3. Rate-limit `/api/auth/*` (Workers Rate Limiting binding).
+4. Self-serve account deletion (section 8).
+5. Cross-delisting when an item sells (section 8).
+6. Imports, then relist/bump (section 7).
