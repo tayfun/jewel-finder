@@ -120,7 +120,12 @@ describe("items", () => {
     expect(sold.data.status).toBe("sold");
     const byMarket = Object.fromEntries(sold.data.listings.map((l) => [l.marketplace, l]));
     expect(byMarket.vinted).toMatchObject({ status: "sold", externalId: "123" });
-    expect(byMarket.ebay?.status).toBe("ended");
+    // Still live on eBay: flagged for ending rather than silently marked ended.
+    expect(byMarket.ebay?.status).toBe("ending");
+    expect((await call<Stats>("/api/stats", { token })).data.toEnd).toBe(1);
+    const ended = await call(`/api/items/${item.id}/listings/ebay`, { token, method: "PUT", json: { status: "ended" } });
+    expect(ended.status).toBe(200);
+    expect((await call<Stats>("/api/stats", { token })).data.toEnd).toBe(0);
 
     const bad = await call(`/api/items/${item.id}/listings/etsy`, { token, method: "PUT", json: { status: "listed" } });
     expect(bad.status).toBe(400);

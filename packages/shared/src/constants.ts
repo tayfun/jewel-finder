@@ -8,7 +8,8 @@ export const CONDITIONS = ["new_with_tags", "new_without_tags", "very_good", "go
 
 export const ITEM_STATUSES = ["draft", "in_stock", "sold", "archived"] as const;
 
-export const LISTING_STATUSES = ["pending", "listed", "sold", "ended", "failed"] as const;
+/** `ending`: the item sold elsewhere but this listing is still live and needs ending (cross-delisting). */
+export const LISTING_STATUSES = ["pending", "listed", "ending", "sold", "ended", "failed"] as const;
 
 export const BOOK_FORMATS = ["hardback", "paperback", "mass_market_paperback", "leather", "spiral", "other"] as const;
 

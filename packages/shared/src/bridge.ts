@@ -17,8 +17,18 @@ export type WebToExtension =
       marketplace: Marketplace;
       /** Lets a signed-out extension adopt the web app's session. */
       token: string;
+    }
+  | {
+      source: typeof BRIDGE_WEB;
+      /** End a live listing (the item sold elsewhere). Answered with LIST_RESULT. */
+      type: "DELIST_ITEM";
+      requestId: string;
+      itemId: string;
+      marketplace: Marketplace;
+      token: string;
     };
 
 export type ExtensionToWeb =
   | { source: typeof BRIDGE_EXT; type: "PONG"; version: string }
+  /** Reply to LIST_ITEM and DELIST_ITEM (one name for both keeps older builds compatible). */
   | { source: typeof BRIDGE_EXT; type: "LIST_RESULT"; requestId: string; ok: boolean; error?: string };

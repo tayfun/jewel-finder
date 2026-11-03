@@ -1,6 +1,7 @@
 import {
   CONDITION_LABELS,
   MARKETPLACES,
+  LISTING_STATUS_LABELS,
   MARKETPLACE_LABELS,
   PACKAGE_SIZE_LABELS,
   formatMoney,
@@ -17,7 +18,7 @@ import { BOOK_FIELDS } from "../book";
 import { Autofill } from "../components/Autofill";
 import { StatusBadge } from "../components/Badges";
 import { Lightbox } from "../components/Lightbox";
-import { listViaExtension, useExtension } from "../extension";
+import { delistViaExtension, listViaExtension, useExtension } from "../extension";
 import { useLoad } from "../hooks";
 
 export function ItemDetail() {
@@ -29,6 +30,7 @@ export function ItemDetail() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [autofill, setAutofill] = useState(false);
   const [viewer, setViewer] = useState(false);
+  const extension = useExtension();
   const imageCount = item?.images.length ?? 0;
 
   // ←/→ step through photos on the page too (the lightbox handles its own keys while open).
@@ -58,6 +60,18 @@ export function ItemDetail() {
   }
 
   const money = (v: number | null) => formatMoney(v, settings.currency);
+
+  /** Marks the item sold, then opens any listings still live elsewhere so the seller can end them. */
+  function markSold(marketplace?: Marketplace) {
+    return act(async () => {
+      const updated = await api<ItemWithListings>(`/api/items/${item!.id}/sold`, { json: marketplace ? { marketplace } : {} });
+      setData(updated);
+      if (!extension) return;
+      for (const l of updated.listings) {
+        if (l.status === "ending" && l.url) await delistViaExtension(updated.id, l.marketplace);
+      }
+    });
+  }
   const profit = item.price != null && item.cost != null ? item.price - item.cost : null;
   const details: [string, string][] = (
     [
@@ -259,20 +273,17 @@ export function ItemDetail() {
               <h2>Sold it?</h2>
               <div className="actions">
                 {MARKETPLACES.map((m) => (
-                  <button
-                    key={m}
-                    onClick={() =>
-                      act(async () => setData(await api(`/api/items/${item.id}/sold`, { json: { marketplace: m } })))
-                    }
-                  >
+                  <button key={m} onClick={() => markSold(m)}>
                     Sold on {MARKETPLACE_LABELS[m]}
                   </button>
                 ))}
-                <button onClick={() => act(async () => setData(await api(`/api/items/${item.id}/sold`, { json: {} })))}>
-                  Sold elsewhere
-                </button>
+                <button onClick={() => markSold()}>Sold elsewhere</button>
               </div>
-              <p className="muted small">Other live listings will be marked as ended — remember to remove them.</p>
+              <p className="muted small">
+                {extension
+                  ? "Any other live listings open in new tabs, ready for you to end them."
+                  : "Any other live listings are flagged so you can end them."}
+              </p>
             </section>
           )}
         </div>
@@ -338,6 +349,28 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
     }
   }
 
+  async function delist(m: Marketplace) {
+    setBusy(m);
+    setError(null);
+    try {
+      await delistViaExtension(item.id, m);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function markEnded(m: Marketplace) {
+    setError(null);
+    try {
+      await api(`/api/items/${item.id}/listings/${m}`, { method: "PUT", json: { status: "ended" } });
+      onChange();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   async function remove(m: Marketplace) {
     await api(`/api/items/${item.id}/listings/${m}`, { method: "DELETE" }).catch((e) => setError(e.message));
     onChange();
@@ -360,8 +393,8 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
       <h2>Marketplaces</h2>
       {extension === false && (
         <p className="notice small">
-          <Link to="/extension">Install the Jewel Finder Chrome extension</Link> to fill in Vinted and eBay listings
-          automatically.
+          <Link to="/extension">Install the Jewel Finder Chrome extension</Link> to fill in and end Vinted and eBay
+          listings for you.
         </p>
       )}
       <ul className="listings">
@@ -372,7 +405,7 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
             <li key={m}>
               <div className="listing-head">
                 <strong>{MARKETPLACE_LABELS[m]}</strong>
-                <span className={`badge ls-${l?.status ?? "none"}`}>{l ? l.status : "not listed"}</span>
+                <span className={`badge ls-${l?.status ?? "none"}`}>{l ? LISTING_STATUS_LABELS[l.status] : "Not listed"}</span>
                 {l?.url && (
                   <a href={l.url} target="_blank" rel="noreferrer" className="small">
                     View ↗
@@ -380,7 +413,31 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
                 )}
               </div>
               {l?.error && <p className="error small">{l.error}</p>}
+              {l?.status === "ending" && (
+                <p className="small reason">
+                  Sold elsewhere but still live here. End it so it can't sell twice.
+                </p>
+              )}
               <div className="actions">
+                {l?.status === "ending" && (
+                  <>
+                    <button
+                      className="primary"
+                      disabled={!!busy || !extension || !l.url}
+                      title={
+                        !l.url
+                          ? "No listing link saved: end it by hand"
+                          : !extension
+                            ? "Extension not detected"
+                            : `Open the listing on ${MARKETPLACE_LABELS[m]} to end it`
+                      }
+                      onClick={() => delist(m)}
+                    >
+                      {busy === m ? "Opening…" : `End on ${MARKETPLACE_LABELS[m]}`}
+                    </button>
+                    <button onClick={() => markEnded(m)}>I've ended it</button>
+                  </>
+                )}
                 {canList && (
                   <button
                     className="primary"
@@ -391,7 +448,7 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
                     {busy === m ? "Opening…" : l?.status === "pending" ? "Try again" : `List on ${MARKETPLACE_LABELS[m]}`}
                   </button>
                 )}
-                {l?.status !== "listed" && l?.status !== "sold" && (
+                {l?.status !== "listed" && l?.status !== "sold" && l?.status !== "ending" && (
                   <button onClick={() => setManual(manual === m ? null : m)}>Already listed?</button>
                 )}
                 {l && (

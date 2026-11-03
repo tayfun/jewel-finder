@@ -188,6 +188,8 @@ export interface Stats {
   stockValue: number;
   /** Sum of cost × quantity for in-stock items. */
   stockCost: number;
+  /** Listings still live for items that sold elsewhere. */
+  toEnd: number;
 }
 
 export interface ApiError {

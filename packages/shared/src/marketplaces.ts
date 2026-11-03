@@ -1,8 +1,17 @@
-import type { BookFormat, Condition, Marketplace, PackageSize, Rarity, Settings } from "./schemas";
+import type { BookFormat, Condition, ListingStatus, Marketplace, PackageSize, Rarity, Settings } from "./schemas";
 
 export const MARKETPLACE_LABELS: Record<Marketplace, string> = {
   vinted: "Vinted",
   ebay: "eBay",
+};
+
+export const LISTING_STATUS_LABELS: Record<ListingStatus, string> = {
+  pending: "Pending",
+  listed: "Listed",
+  ending: "Needs ending",
+  sold: "Sold",
+  ended: "Ended",
+  failed: "Failed",
 };
 
 export const CONDITION_LABELS: Record<Condition, string> = {

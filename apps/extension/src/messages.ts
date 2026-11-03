@@ -1,6 +1,8 @@
 import type { Account, ItemStatus, ItemWithListings, Marketplace, Settings } from "@jf/shared";
 
 export interface Job {
+  /** "list" fills in a new listing; "delist" ends a live one. Missing on jobs from older builds = "list". */
+  kind?: "list" | "delist";
   itemId: string;
   marketplace: Marketplace;
   startedAt: number;
@@ -33,9 +35,11 @@ export type Request =
   | { type: "AUTH_LOGOUT" }
   | { type: "LIST_ITEMS"; q?: string; status?: ItemStatus }
   | { type: "START_LISTING"; itemId: string; marketplace: Marketplace; token?: string }
+  | { type: "START_DELISTING"; itemId: string; marketplace: Marketplace; token?: string }
   | { type: "GET_JOB" }
   | { type: "GET_IMAGES" }
   | { type: "JOB_PUBLISHED"; url: string; externalId: string }
+  | { type: "JOB_DELISTED" }
   | { type: "JOB_CANCEL" };
 
 export interface Responses {
@@ -44,9 +48,11 @@ export interface Responses {
   AUTH_LOGOUT: null;
   LIST_ITEMS: { items: ItemWithListings[] };
   START_LISTING: { tabId: number };
+  START_DELISTING: { tabId: number };
   GET_JOB: JobContext | null;
   GET_IMAGES: ImageFile[];
   JOB_PUBLISHED: null;
+  JOB_DELISTED: null;
   JOB_CANCEL: null;
 }
 

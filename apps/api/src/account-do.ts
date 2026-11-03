@@ -324,11 +324,9 @@ class AccountDOBase extends DurableObject<Env> {
     this.ctx.storage.transactionSync(() => {
       const db = this.db();
       db.exec("UPDATE items SET status = 'sold', quantity = 0, updated_at = ? WHERE id = ?", now, id);
-      db.exec(
-        "UPDATE listings SET status = 'ended', updated_at = ? WHERE item_id = ? AND status IN ('pending', 'listed')",
-        now,
-        id,
-      );
+      // Live listings elsewhere must still be taken down (cross-delisting); unpublished drafts just end.
+      db.exec("UPDATE listings SET status = 'ending', updated_at = ? WHERE item_id = ? AND status = 'listed'", now, id);
+      db.exec("UPDATE listings SET status = 'ended', updated_at = ? WHERE item_id = ? AND status = 'pending'", now, id);
       if (marketplace) {
         db.exec(
           "UPDATE listings SET status = 'sold', updated_at = ? WHERE item_id = ? AND marketplace = ?",
@@ -403,7 +401,8 @@ class AccountDOBase extends DurableObject<Env> {
         "SELECT SUM(COALESCE(price, 0) * quantity) AS v, SUM(COALESCE(cost, 0) * quantity) AS c FROM items WHERE status = 'in_stock'",
       )
       .one();
-    return { byStatus, listed, stockValue: value.v ?? 0, stockCost: value.c ?? 0 };
+    const toEnd = db.exec<{ n: number }>("SELECT COUNT(*) AS n FROM listings WHERE status = 'ending'").one().n;
+    return { byStatus, listed, stockValue: value.v ?? 0, stockCost: value.c ?? 0, toEnd };
   }
 }
 

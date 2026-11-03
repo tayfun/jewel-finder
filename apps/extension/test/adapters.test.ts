@@ -1,5 +1,5 @@
 import type { ItemWithListings, Settings } from "@jf/shared";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ebay } from "../src/content/ebay";
 import { vinted } from "../src/content/vinted";
 import type { JobContext } from "../src/messages";
@@ -170,4 +170,73 @@ describe("ebay adapter", () => {
     expect(document.querySelector<HTMLTextAreaElement>('[name="description"]')!.value).toBe(frameDoc.body.innerHTML);
     expect(report.filled).toContain("Description");
   }, 15_000);
+});
+
+describe("cross-delisting", () => {
+  const setUrl = (url: string) => (window as unknown as { happyDOM: { setURL(u: string): void } }).happyDOM.setURL(url);
+  const listed = (marketplace: "vinted" | "ebay", externalId: string, url: string): JobContext => {
+    const c = ctx(marketplace);
+    const listing = { ...c.item.listings[0], marketplace, status: "ending", externalId, url } as ItemWithListings["listings"][number];
+    return { ...c, job: { ...c.job, kind: "delist" }, item: { ...c.item, listings: [listing] } };
+  };
+  afterEach(() => {
+    vi.restoreAllMocks();
+    setUrl("http://localhost:3000/");
+  });
+
+  it("vinted: opens the delete dialog and checks the item is gone", async () => {
+    const job = listed("vinted", "123", "https://www.vinted.co.uk/items/123-levis");
+    setUrl("https://www.vinted.co.uk/items/123-levis");
+    document.body.innerHTML = `<button>Edit listing</button><button data-testid="item-delete-button">Delete</button>`;
+    document.querySelector('[data-testid="item-delete-button"]')!.addEventListener("click", () => {
+      document.body.insertAdjacentHTML("beforeend", `<div role="dialog"><button>Cancel</button><button>Confirm and delete</button></div>`);
+    });
+    expect(await vinted.delist.step(job)).toMatch(/Press “Confirm and delete”/);
+
+    // Still on the item page: not done. Elsewhere and the item 404s: done.
+    expect(await vinted.delist.isDone(job, new URL("https://www.vinted.co.uk/items/123-levis"), document)).toBe(false);
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 404 }));
+    expect(await vinted.delist.isDone(job, new URL("https://www.vinted.co.uk/member/42"), document)).toBe(true);
+    expect(String(fetch.mock.calls[0]![0])).toBe("/items/123-levis");
+  });
+
+  it("vinted: not done if the item page still loads", async () => {
+    const job = listed("vinted", "123", "https://www.vinted.co.uk/items/123-levis");
+    const res = new Response("<html></html>", { status: 200 });
+    Object.defineProperty(res, "url", { value: "https://www.vinted.co.uk/items/123-levis" });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(res);
+    expect(await vinted.delist.isDone(job, new URL("https://www.vinted.co.uk/member/42"), document)).toBe(false);
+  });
+
+  it("ebay: follows End listing, picks a reason, and spots the ended page", async () => {
+    const job = listed("ebay", "326112233445", "https://www.ebay.co.uk/itm/326112233445");
+    setUrl("https://www.ebay.co.uk/itm/326112233445");
+    let opened = false;
+    document.body.innerHTML = `<a href="#end">End listing</a>`;
+    document.querySelector("a")!.addEventListener("click", (e) => {
+      e.preventDefault();
+      opened = true;
+    });
+    expect(await ebay.delist.step(job)).toMatch(/Opening/);
+    expect(opened).toBe(true);
+
+    document.body.innerHTML = `<h1>End your listing</h1><p>Why are you ending this listing?</p>
+      <label><input type="radio" name="reason" value="lost">The item was lost or broken</label>
+      <label><input type="radio" name="reason" value="na">The item is no longer available for sale</label>
+      <button>End listing</button>`;
+    expect(await ebay.delist.step(job)).toMatch(/Press “End listing”/);
+    expect(document.querySelector<HTMLInputElement>("input:checked")?.value).toBe("na");
+
+    document.body.innerHTML = `<h1>Your listing has been ended</h1>`;
+    expect(await ebay.delist.isDone(job, new URL("https://www.ebay.co.uk/sh/lst/ended"), document)).toBe(true);
+  });
+
+  it("ebay: ignores 'ended' text that only appears in scripts", async () => {
+    const job = listed("ebay", "326112233445", "https://www.ebay.co.uk/itm/326112233445");
+    document.body.innerHTML = `<h1>Seller Hub</h1>`;
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(`<html><body><h1>Levi's 501</h1><script>var t = "This listing has ended";</script></body></html>`),
+    );
+    expect(await ebay.delist.isDone(job, new URL("https://www.ebay.co.uk/sh/lst/active"), document)).toBe(false);
+  });
 });

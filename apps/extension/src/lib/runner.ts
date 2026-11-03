@@ -18,6 +18,18 @@ export interface Adapter {
   fill(ctx: JobContext, photos: File[]): Promise<FillReport>;
   /** Spot a published listing on the current page. Only consulted after we've filled a form in this tab. */
   detectPublished(url: URL, doc: Document): Published | null;
+  /** Ending a live listing (cross-delisting). */
+  delist: Delister;
+}
+
+/**
+ * Takes a listing down as far as it safely can; the seller presses the marketplace's final confirm.
+ * `step` runs once per page the tab shows and returns what the seller should do next. `isDone` is
+ * only asked after a step has run, and should check the listing is really gone.
+ */
+export interface Delister {
+  step(ctx: JobContext): Promise<string>;
+  isDone(ctx: JobContext, url: URL, doc: Document): Promise<boolean>;
 }
 
 // sessionStorage is per tab and survives the full-page navigations marketplaces do after submit.
@@ -31,6 +43,7 @@ export async function run(adapter: Adapter): Promise<void> {
     return; // signed out or API unreachable; nothing to do on this page
   }
   if (!ctx || ctx.job.marketplace !== adapter.marketplace) return;
+  if (ctx.job.kind === "delist") return runDelist(adapter, ctx);
   const job = ctx;
   const title = `${MARKETPLACE_LABELS[adapter.marketplace]}: ${job.item.title}`;
   let finished = false;
@@ -80,6 +93,55 @@ export async function run(adapter: Adapter): Promise<void> {
 
   void handle();
   // Marketplaces are SPAs: watch for client-side navigation as well as full loads.
+  const timer = setInterval(() => {
+    if (finished) clearInterval(timer);
+    else void handle();
+  }, 700);
+}
+
+const delistKey = (ctx: JobContext) => `jewel-finder.delist.${ctx.job.itemId}.${ctx.job.marketplace}`;
+
+/** Cross-delisting: walk the seller through ending the listing, then mark it ended in Jewel Finder. */
+async function runDelist(adapter: Adapter, ctx: JobContext): Promise<void> {
+  const title = `End on ${MARKETPLACE_LABELS[adapter.marketplace]}: ${ctx.item.title}`;
+  let finished = false;
+  let busy = false;
+  let handledHref = "";
+
+  setCancelHandler(() => {
+    finished = true;
+    sessionStorage.removeItem(delistKey(ctx));
+    void send({ type: "JOB_CANCEL" });
+  });
+
+  async function handle() {
+    if (finished || busy || location.href === handledHref) return;
+    handledHref = location.href;
+    busy = true;
+    try {
+      if (sessionStorage.getItem(delistKey(ctx)) && (await adapter.delist.isDone(ctx, new URL(location.href), document))) {
+        finished = true;
+        sessionStorage.removeItem(delistKey(ctx));
+        try {
+          await send({ type: "JOB_DELISTED" });
+          showBanner({ kind: "done", title, message: "Listing ended and marked as ended in Jewel Finder." });
+        } catch (e) {
+          showBanner({ kind: "error", title, message: `Ended, but couldn't update Jewel Finder: ${(e as Error).message}` });
+        }
+        return;
+      }
+      showBanner({ kind: "working", title, message: "Getting the listing ready to end…" });
+      const next = await adapter.delist.step(ctx);
+      sessionStorage.setItem(delistKey(ctx), "1");
+      showBanner({ kind: "hint", title, message: next });
+    } catch (e) {
+      showBanner({ kind: "error", title, message: (e as Error).message });
+    } finally {
+      busy = false;
+    }
+  }
+
+  void handle();
   const timer = setInterval(() => {
     if (finished) clearInterval(timer);
     else void handle();

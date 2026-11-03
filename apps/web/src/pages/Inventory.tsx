@@ -52,6 +52,18 @@ export function Inventory() {
         </div>
       )}
 
+      {s && s.toEnd > 0 && (
+        <p className="notice">
+          <strong>
+            {s.toEnd} listing{s.toEnd === 1 ? " is" : "s are"} still live
+          </strong>{" "}
+          for items you've sold. End {s.toEnd === 1 ? "it" : "them"} so nobody buys the same item twice:{" "}
+          <button className="link" onClick={() => setStatus("sold")}>
+            show sold items
+          </button>
+        </p>
+      )}
+
       <div className="toolbar">
         <input
           type="search"

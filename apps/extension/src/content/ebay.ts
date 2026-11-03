@@ -6,10 +6,11 @@ import {
   toDecimal,
   type PackageSize,
 } from "@jf/shared";
-import type { FillReport } from "../messages";
+import type { FillReport, JobContext } from "../messages";
 import {
   attachFiles,
   click,
+  findButton,
   findChoice,
   findField,
   normalize,
@@ -153,6 +154,9 @@ async function fillSpecific(spec: FieldSpec, value: string): Promise<boolean> {
   return true;
 }
 
+const listingOf = (ctx: JobContext) => ctx.item.listings.find((l) => l.marketplace === "ebay");
+const ENDED = /(listing|item) (has been|was|is now) ended|you('ve| have) ended|ended successfully|this listing (has|was) ended|seller ended this listing/;
+
 export const ebay: Adapter = {
   marketplace: "ebay",
 
@@ -174,6 +178,51 @@ export const ebay: Adapter = {
       if (found) return found;
     }
     return null;
+  },
+
+  // Item page → "End listing" → reason page. The seller presses eBay's final "End listing".
+  delist: {
+    async step(ctx) {
+      const id = listingOf(ctx)?.externalId;
+      const after = "Jewel Finder marks it ended once it's done.";
+      const text = normalize(document.body?.innerText ?? document.body?.textContent);
+      const onEndPage =
+        /EndingMyAuction|\/end(listing)?\b/i.test(location.href) ||
+        (/why are you ending|end your listing/.test(text) && Boolean(document.querySelector("input[type=radio]")));
+      if (onEndPage) {
+        const reason = findChoice(/no longer available|sold (it )?(elsewhere|outside)/);
+        if (reason) click(reason);
+        return reason
+          ? `Reason set to “no longer available”. Press “End listing” to confirm. ${after}`
+          : `Pick a reason and press “End listing”. ${after}`;
+      }
+      if (parseListingUrl("ebay", location.href)?.externalId === id) {
+        const end =
+          findButton(/^end (your |this )?listing$/) ??
+          document.querySelector<HTMLElement>('a[href*="EndingMyAuction" i], a[href*="endlisting" i]');
+        if (end) {
+          click(end);
+          return "Opening eBay's End listing page…";
+        }
+      }
+      return `In Seller Hub, open Listings → Active, find item ${id ?? ""} and choose Actions → End listing. ${after}`;
+    },
+
+    async isDone(ctx, _url, doc) {
+      if (ENDED.test(normalize(doc.body?.innerText ?? doc.body?.textContent))) return true;
+      const id = listingOf(ctx)?.externalId;
+      if (!id) return false;
+      // Double-check on the item page itself, which says when the seller ended it.
+      try {
+        const res = await fetch(`/itm/${id}`, { credentials: "include" });
+        const page = new DOMParser().parseFromString(await res.text(), "text/html");
+        // Scripts can carry "ended" strings on live listings too; only read what's shown.
+        page.querySelectorAll("script, style, template, noscript").forEach((el) => el.remove());
+        return ENDED.test(normalize(page.body?.textContent));
+      } catch {
+        return false;
+      }
+    },
   },
 
   async fill({ item }, photos): Promise<FillReport> {

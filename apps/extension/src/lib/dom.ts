@@ -195,3 +195,17 @@ export function findChoice(match: RegExp, root: ParentNode = document, exclude?:
   if (best instanceof HTMLLabelElement && best.control) return best.control as HTMLElement;
   return best;
 }
+
+/** The button or link under `root` whose text matches `match` (shortest text wins). */
+export function findButton(match: RegExp, root: ParentNode = document): HTMLElement | null {
+  let best: HTMLElement | null = null;
+  let bestLength = Infinity;
+  for (const el of root.querySelectorAll<HTMLElement>("button, a, [role=button], [role=menuitem]")) {
+    const text = spacedText(el) || normalize(el.getAttribute("aria-label"));
+    if (match.test(text) && text.length < bestLength) {
+      best = el;
+      bestLength = text.length;
+    }
+  }
+  return best;
+}

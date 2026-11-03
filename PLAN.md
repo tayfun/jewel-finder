@@ -100,6 +100,13 @@ GET    /images/:key                                        → image bytes (publ
    The side panel lists what was filled and what still needs doing by hand, with values to copy.
 5. When the page navigates to a published listing URL, the content script reports
    `{url, externalId}` → background → `PUT /api/items/:id/listings/:marketplace {status: listed}`.
+6. **Cross-delisting.** Marking an item sold turns its other live listings into `ending` ("Needs
+   ending"). The web app then asks the extension (bridge `DELIST_ITEM`) to open each one in a `delist`
+   job. Vinted: the content script clicks "Delete" and the seller confirms. eBay: it follows "End
+   listing" and picks "no longer available", or points to Seller Hub, and the seller confirms. Once the
+   tab moves on, it checks the listing is really gone (Vinted: the item page 404s; eBay: the page or the
+   item page says it ended) and sets the listing to `ended`. "I've ended it" in the web app does the
+   same by hand. The inventory page warns while any listing still needs ending.
 
 Selectors live in one adapter file per marketplace with multiple fallback strategies
 (test ids → names → label text → placeholders) because marketplace DOMs change without notice.
@@ -107,7 +114,7 @@ Selectors live in one adapter file per marketplace with multiple fallback strate
 ## 5. Implementation steps
 
 Status (2026-11-03): steps 1–5 are implemented and deployed, along with AI auto-fill, Sentry, package
-sizes, the extension install page and the privacy policy. Tests: shared 10, API 16 (in workerd), extension 14
+sizes, the extension install page and the privacy policy. Cross-delisting is built but not deployed. Tests: shared 10, API 16 (in workerd), extension 18
 (happy-dom, incl. a real React-controlled form). The web app was exercised end to end in a browser.
 Live marketplace checks so far: one eBay listing was tried with the production extension; the
 description fix was built from the real eBay form. Still unverified live: eBay's package size picker (only its summary button was
@@ -168,7 +175,6 @@ the Worker, uploads source maps to Sentry (when configured) and runs `wrangler d
 
 ## 8. Later / out of scope for v1
 
-- Cross-delisting: when an item sells on one marketplace, open the others and end the listing.
 - Bulk actions, CSV import/export, multi-quantity stock with per-sale tracking, profit reports.
 - Email verification, password reset, email change (needs an email→account index).
 - Image editing (crop/rotate/background removal), signed/private image URLs.
@@ -184,8 +190,8 @@ the Worker, uploads source maps to Sentry (when configured) and runs `wrangler d
    `VITE_EXTENSION_URL` and redeploy.
 2. **Live marketplace checks**: list a real item on Vinted and eBay. Capture eBay's package size picker
    and Vinted's form (category, brand, condition, parcel size) and turn them into test fixtures; adjust
-   `apps/extension/src/content/{vinted,ebay}.ts` where selectors miss.
+   `apps/extension/src/content/{vinted,ebay}.ts` where selectors miss. Include cross-delisting: Vinted's
+   Delete button and dialog, and whether eBay's item page has "End listing" for the seller.
 3. Rate-limit `/api/auth/*` (Workers Rate Limiting binding).
 4. Self-serve account deletion (section 8).
-5. Cross-delisting when an item sells (section 8).
-6. Imports, then relist/bump (section 7).
+5. Imports, then relist/bump (section 7).

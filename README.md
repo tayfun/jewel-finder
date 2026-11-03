@@ -39,6 +39,10 @@ the marketplace's sell page and fills photos, title, description, price and what
 you finish the remaining fields shown in the on-page panel and press the marketplace's own button →
 the extension records the listing URL back in your inventory.
 
+Cross-delisting: mark an item sold ("Sold on Vinted/eBay/elsewhere") → its other live listings become
+"Needs ending" and the extension opens each one → it gets the delete/end step ready (Vinted: Delete;
+eBay: End listing with a reason) and you confirm → once the listing is gone it's marked ended.
+
 The marketplace selectors live in `apps/extension/src/content/{vinted,ebay}.ts`. Marketplaces change
 their DOM regularly — that's the first place to look when a field stops filling.
 

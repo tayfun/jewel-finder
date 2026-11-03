@@ -283,7 +283,8 @@ label small { font-weight: 400; }
 .mk-vinted.ls-pending, .mk-ebay.ls-pending { opacity: 0.6; }
 .ls-listed { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .ls-pending { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
-.ls-failed { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+.ls-failed, .ls-ending { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+.mk-vinted.ls-ending, .mk-ebay.ls-ending { background: var(--danger); color: #fff; }
 .mk-vinted.ls-listed { background: var(--vinted); color: #fff; }
 .mk-ebay.ls-listed { background: var(--ebay); color: #fff; }
 

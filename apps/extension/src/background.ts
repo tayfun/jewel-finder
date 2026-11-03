@@ -1,4 +1,4 @@
-import { imageUrl, sellUrl, type Account, type AuthResponse, type ItemWithListings } from "@jf/shared";
+import { MARKETPLACE_LABELS, imageUrl, sellUrl, type Account, type AuthResponse, type ItemWithListings } from "@jf/shared";
 import { API_URL } from "./config";
 import { api, getAuth, setAuth, tokenSubject } from "./lib/api";
 import type { ImageFile, Job, Reply, Request, Responses } from "./messages";
@@ -106,7 +106,25 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
     });
     const tab = await chrome.tabs.create({ url: sellUrl(marketplace, auth.account.settings, item.title) });
     if (tab.id == null) throw new Error("Couldn't open a tab");
-    await setJob(tab.id, { itemId, marketplace, startedAt: Date.now() });
+    await setJob(tab.id, { kind: "list", itemId, marketplace, startedAt: Date.now() });
+    return { tabId: tab.id };
+  },
+
+  // Cross-delisting: open the live listing so the content script can take it down.
+  async START_DELISTING({ itemId, marketplace, token }) {
+    if (token) await adoptToken(token);
+    if (!(await getAuth())) throw new Error("Sign in to the Jewel Finder extension first");
+    const item = await api<ItemWithListings>(`/api/items/${itemId}`);
+    const listing = item.listings.find((l) => l.marketplace === marketplace);
+    if (!listing || (listing.status !== "listed" && listing.status !== "ending")) {
+      throw new Error(`This item isn't live on ${MARKETPLACE_LABELS[marketplace]}`);
+    }
+    if (!listing.url) {
+      throw new Error(`No ${MARKETPLACE_LABELS[marketplace]} link saved for this listing. End it by hand, then mark it ended.`);
+    }
+    const tab = await chrome.tabs.create({ url: listing.url });
+    if (tab.id == null) throw new Error("Couldn't open a tab");
+    await setJob(tab.id, { kind: "delist", itemId, marketplace, startedAt: Date.now() });
     return { tabId: tab.id };
   },
 
@@ -146,10 +164,22 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
     return null;
   },
 
+  async JOB_DELISTED(_req, sender) {
+    const job = await jobFor(sender);
+    if (!job) return null;
+    await api(`/api/items/${job.itemId}/listings/${job.marketplace}`, {
+      method: "PUT",
+      json: { status: "ended", error: null },
+    });
+    await setJob(tabOf(sender), null);
+    return null;
+  },
+
   async JOB_CANCEL(_req, sender) {
     const job = await jobFor(sender);
     if (!job) return null;
     await setJob(tabOf(sender), null);
+    if (job.kind === "delist") return null; // the listing stays flagged for ending
     const item = await api<ItemWithListings>(`/api/items/${job.itemId}`);
     if (item.listings.find((l) => l.marketplace === job.marketplace)?.status === "pending") {
       await api(`/api/items/${job.itemId}/listings/${job.marketplace}`, { method: "DELETE" });

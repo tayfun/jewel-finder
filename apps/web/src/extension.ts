@@ -45,6 +45,15 @@ export function useExtension(): string | false | null {
 
 /** Asks the extension to open the marketplace's sell page and fill it in. */
 export function listViaExtension(itemId: string, marketplace: Marketplace): Promise<void> {
+  return request("LIST_ITEM", itemId, marketplace);
+}
+
+/** Asks the extension to open a live listing and take it down (the item sold elsewhere). */
+export function delistViaExtension(itemId: string, marketplace: Marketplace): Promise<void> {
+  return request("DELIST_ITEM", itemId, marketplace);
+}
+
+function request(type: "LIST_ITEM" | "DELIST_ITEM", itemId: string, marketplace: Marketplace): Promise<void> {
   const requestId = crypto.randomUUID();
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -56,8 +65,8 @@ export function listViaExtension(itemId: string, marketplace: Marketplace): Prom
       clearTimeout(timer);
       off();
       if (msg.ok) resolve();
-      else reject(new Error(msg.error ?? "The extension couldn't start the listing"));
+      else reject(new Error(msg.error ?? "The extension couldn't open the marketplace"));
     });
-    post({ source: BRIDGE_WEB, type: "LIST_ITEM", requestId, itemId, marketplace, token: getToken() ?? "" });
+    post({ source: BRIDGE_WEB, type, requestId, itemId, marketplace, token: getToken() ?? "" });
   });
 }

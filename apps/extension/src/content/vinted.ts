@@ -6,8 +6,20 @@ import {
   vintedPackageSize,
   type VintedPackageSize,
 } from "@jf/shared";
-import type { FillReport } from "../messages";
-import { attachFiles, click, findChoice, findField, normalize, pickOption, setValue, sleep, waitFor, type FieldSpec } from "../lib/dom";
+import type { FillReport, JobContext } from "../messages";
+import {
+  attachFiles,
+  click,
+  findButton,
+  findChoice,
+  findField,
+  normalize,
+  pickOption,
+  setValue,
+  sleep,
+  waitFor,
+  type FieldSpec,
+} from "../lib/dom";
 import { run, type Adapter } from "../lib/runner";
 
 // Vinted's upload form (/items/new). Several strategies per field because the DOM changes without notice.
@@ -60,12 +72,52 @@ function selectPackageSize(size: VintedPackageSize): boolean {
   return true;
 }
 
+const listingOf = (ctx: JobContext) => ctx.item.listings.find((l) => l.marketplace === "vinted");
+const DIALOG = '[role=dialog], dialog[open], [data-testid*="modal"]';
+
 export const vinted: Adapter = {
   marketplace: "vinted",
 
   isSellPage: (url) => /^\/items\/new\/?$/.test(url.pathname),
 
   detectPublished: (url) => parseListingUrl("vinted", url.href),
+
+  // Own item page → "Delete" → confirmation dialog. The seller presses the final confirm.
+  delist: {
+    async step(ctx) {
+      const listing = listingOf(ctx);
+      const after = "Jewel Finder marks it ended once it's gone.";
+      if (parseListingUrl("vinted", location.href)?.externalId !== listing?.externalId) {
+        return `Open the listing (${listing?.url ?? "on Vinted"}) and delete it. ${after}`;
+      }
+      const remove = await waitFor(
+        () => findButton(/^delete( item| listing)?$/) ?? document.querySelector<HTMLElement>('[data-testid*="delete" i]'),
+        10_000,
+      );
+      if (!remove) return `Click “Delete” on this listing and confirm. ${after}`;
+      click(remove);
+      const confirm = await waitFor(() => {
+        const dialog = document.querySelector(DIALOG);
+        return dialog ? findButton(/delete|confirm/, dialog) : null;
+      }, 4000);
+      const label = confirm?.textContent?.trim();
+      return label ? `Press “${label}” to delete it from Vinted. ${after}` : `Confirm the deletion on Vinted. ${after}`;
+    },
+
+    async isDone(ctx, url) {
+      const listing = listingOf(ctx);
+      if (!listing?.url || !listing.externalId) return false;
+      if (parseListingUrl("vinted", url.href)?.externalId === listing.externalId) return false;
+      // Vinted leaves the item page after deleting; make sure the item really is gone.
+      try {
+        const res = await fetch(new URL(listing.url).pathname, { credentials: "include" });
+        if (res.status === 404 || res.status === 410) return true;
+        return !res.url.includes(`/items/${listing.externalId}`);
+      } catch {
+        return false;
+      }
+    },
+  },
 
   async fill({ item }, photos): Promise<FillReport> {
     const report: FillReport = { filled: [], manual: [], warnings: [] };
