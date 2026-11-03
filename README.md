@@ -160,7 +160,9 @@ Scoring is in `packages/shared/src/duplicates.ts`. Title similarity is the base:
 shorter title's words the longer one contains, since eBay titles add keywords. A shared ISBN counts as a
 strong match. Matching brand, size, author and price add to the score, as does being live on different
 marketplaces. A different ISBN, author, brand or size rules a pair out ("S" ≠ "XS", but "W32" matches
-"W32 L30"); so do both being live on the same marketplace, both being sold, or either being archived.
+"W32 L30"); so do both being live on the same marketplace (a "pending" listing doesn't count as live: pending
+on one and live on the other is the usual unrecorded-listing-then-imported duplicate), both being sold, or
+either being archived.
 Pairs scoring at least `DUPLICATE_THRESHOLD` (0.8) are shown. Photos aren't compared, because each
 marketplace re-compresses them.
 

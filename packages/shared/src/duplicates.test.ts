@@ -60,6 +60,11 @@ describe("duplicateMatch", () => {
     expect(duplicateMatch(a, b)).toBeNull();
     expect(duplicateMatch(item({ title: "Zara linen shirt", status: "sold" }), item({ title: "Zara linen shirt", status: "sold" }))).toBeNull();
     expect(duplicateMatch(item({ title: "Zara linen shirt", status: "archived" }), item({ title: "Zara linen shirt" }))).toBeNull();
+    // Pending on a site (listed from the app, never recorded) and live there on the other: one item, imported twice.
+    const pending = item({ title: "Zara linen shirt white", live: ["vinted", "ebay"] });
+    pending.listings.find((l) => l.marketplace === "ebay")!.status = "pending";
+    const imported = item({ title: "Zara linen shirt white", live: ["ebay"] });
+    expect(duplicateMatch(pending, imported)).toMatchObject({ reasons: expect.arrayContaining(["Listed on Vinted and eBay"]) });
     // Sold on one site, still live on the other: exactly the case worth catching.
     expect(duplicateMatch(item({ title: "Zara linen shirt", status: "sold" }), item({ title: "Zara linen shirt", live: ["ebay"] }))!.score).toBe(1);
   });

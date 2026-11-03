@@ -331,6 +331,9 @@ describe("duplicates", () => {
       await call(`/api/items/${a.id}/listings/vinted`, { token, method: "PUT", json: { status: "listed", externalId: "1" } });
       await call(`/api/items/${a.id}/listings/ebay`, { token, method: "PUT", json: { status: "pending" } });
       await call(`/api/items/${b.id}/listings/ebay`, { token, method: "PUT", json: { status: "listed", externalId: "999" } });
+      // Suggested as a pair: pending on eBay isn't "live on eBay twice".
+      const pairs = (await call<{ pairs: DuplicatePair[] }>("/api/duplicates", { token })).data.pairs;
+      expect(pairs.map((p) => [p.a.id, p.b.id].sort())).toEqual([[a.id, b.id].sort()]);
       const [keep, drop] = keepPending ? [a, b] : [b, a];
       const merged = await call<ItemWithListings>(`/api/items/${keep.id}/merge`, { token, json: { otherId: drop.id } });
       expect(merged.status).toBe(200);

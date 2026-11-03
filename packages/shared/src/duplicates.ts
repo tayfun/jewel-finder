@@ -77,7 +77,10 @@ export function sizesAgree(a: string, b: string): boolean {
   return false;
 }
 
-const LIVE = new Set(["listed", "ending", "pending"]);
+// Up on the marketplace. Not "pending": that's a listing started from the app that was never recorded
+// as done, so "pending here, live there on the same site" is the classic duplicate (the live one got
+// imported as a second item), not two copies.
+const LIVE = new Set(["listed", "ending"]);
 const liveOn = (item: ItemWithListings) => new Set(item.listings.filter((l) => LIVE.has(l.status)).map((l) => l.marketplace));
 
 /**
