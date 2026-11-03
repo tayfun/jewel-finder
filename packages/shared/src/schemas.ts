@@ -190,6 +190,8 @@ export interface Stats {
   stockCost: number;
   /** Listings still live for items that sold elsewhere. */
   toEnd: number;
+  /** Pairs of items that look like the same thing entered twice (see /api/duplicates). */
+  duplicates: number;
 }
 
 export interface ApiError {
@@ -241,4 +243,12 @@ export interface ImportResult {
     /** false: that listing was already in the inventory, so nothing was added. */
     created: boolean;
   }[];
+  /** Newly created items that look like one already in the inventory. */
+  possibleDuplicates: string[];
 }
+
+/** Merge `otherId` into the item in the URL; the other item is deleted. */
+export const MergeRequest = z.object({ otherId: z.string().min(1).max(100) });
+
+/** The seller says these two aren't the same item; stop suggesting them. */
+export const DismissDuplicateRequest = z.object({ a: z.string().min(1).max(100), b: z.string().min(1).max(100) });

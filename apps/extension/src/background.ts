@@ -280,12 +280,18 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
         console.warn("Jewel Finder: skipped a photo", url, e);
       }
     }
-    const { results } = await api<ImportResult>("/api/items/import", {
+    const { results, possibleDuplicates } = await api<ImportResult>("/api/items/import", {
       json: { marketplace, listings: [toImportListing(marketplace, listing, images)] },
     });
     const result = results[0];
     if (!result) throw new Error("Import failed");
-    return { itemId: result.itemId, created: result.created, photos: result.created ? images.length : 0 };
+    return {
+      itemId: result.itemId,
+      created: result.created,
+      photos: result.created ? images.length : 0,
+      // Older servers don't send it.
+      possibleDuplicate: (possibleDuplicates ?? []).includes(result.itemId),
+    };
   },
 
   async FETCH_DESCRIPTION({ url }, sender) {

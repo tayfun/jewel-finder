@@ -1,4 +1,4 @@
-import type { AuthResponse, ImportResult, ItemWithListings, Listing, Stats } from "@jf/shared";
+import type { AuthResponse, DuplicatePair, ImportResult, ItemWithListings, Listing, Stats } from "@jf/shared";
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
@@ -242,5 +242,109 @@ describe("imports", () => {
     expect((await call("/api/items/import", { token: b.token, json: { marketplace: "etsy", listings: [] } })).status).toBe(400);
     expect((await call("/api/listings?marketplace=etsy", { token: b.token })).status).toBe(400);
     expect((await call<{ items: unknown[] }>("/api/items", { token: b.token })).data.items).toHaveLength(0);
+  });
+});
+
+describe("duplicates", () => {
+  const png = () => Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="), (c) => c.charCodeAt(0));
+
+  it("flags the same item imported from both marketplaces and merges it", async () => {
+    const { token } = await signUp();
+    const photo = async () => (await call<{ key: string }>("/api/images", { token, body: png(), type: "image/png" })).data.key;
+    const [vPhoto, ePhoto] = [await photo(), await photo()];
+    const v = await call<ImportResult>("/api/items/import", {
+      token,
+      json: {
+        marketplace: "vinted",
+        listings: [{ externalId: "11", url: "https://www.vinted.co.uk/items/11", item: { title: "Levi's 501 jeans", brand: "Levi's", size: "W32", price: 2500, images: [vPhoto], tags: ["denim"] } }],
+      },
+    });
+    expect(v.data.possibleDuplicates).toEqual([]);
+    const e = await call<ImportResult>("/api/items/import", {
+      token,
+      json: {
+        marketplace: "ebay",
+        listings: [
+          {
+            externalId: "326112233445",
+            url: "https://www.ebay.co.uk/itm/326112233445",
+            item: { title: "Levis 501 Original Straight Jeans Mens W32 L30", brand: "Levi's", size: "W32 L30", price: 2800, description: "From eBay", condition: "good", images: [ePhoto], tags: ["mens"] },
+          },
+        ],
+      },
+    });
+    const vId = v.data.results[0]!.itemId;
+    const eId = e.data.results[0]!.itemId;
+    expect(e.data.possibleDuplicates).toEqual([eId]);
+
+    const all = await call<{ pairs: DuplicatePair[] }>("/api/duplicates", { token });
+    expect(all.data.pairs).toHaveLength(1);
+    expect(all.data.pairs[0]!.reasons).toContain("Listed on Vinted and eBay");
+    expect((await call<Stats>("/api/stats", { token })).data.duplicates).toBe(1);
+    expect((await call<{ pairs: DuplicatePair[] }>(`/api/duplicates?itemId=${vId}`, { token })).data.pairs).toHaveLength(1);
+
+    // Keep the Vinted item: it gets the eBay listing, the missing description and condition, and both tags.
+    const merged = await call<ItemWithListings>(`/api/items/${vId}/merge`, { token, json: { otherId: eId } });
+    expect(merged.status).toBe(200);
+    expect(merged.data).toMatchObject({ title: "Levi's 501 jeans", price: 2500, description: "From eBay", condition: "good", images: [vPhoto], tags: ["denim", "mens"] });
+    expect(merged.data.listings.map((l) => [l.marketplace, l.status, l.externalId])).toEqual([
+      ["ebay", "listed", "326112233445"],
+      ["vinted", "listed", "11"],
+    ]);
+    expect((await call(`/api/items/${eId}`, { token })).status).toBe(404);
+    expect((await call<{ items: unknown[] }>("/api/items", { token })).data.items).toHaveLength(1);
+    expect((await call<Stats>("/api/stats", { token })).data.duplicates).toBe(0);
+    // Re-importing the eBay listing now finds it on the merged item.
+    const again = await call<ImportResult>("/api/items/import", {
+      token,
+      json: { marketplace: "ebay", listings: [{ externalId: "326112233445", url: "https://www.ebay.co.uk/itm/326112233445", item: { title: "x" } }] },
+    });
+    expect(again.data.results[0]).toMatchObject({ itemId: vId, created: false });
+    // The dropped item's photo is deleted (in waitUntil).
+    let status = 200;
+    for (let i = 0; i < 20 && status === 200; i++) {
+      status = (await exports.default.fetch(`${BASE}/images/${ePhoto}`)).status;
+      if (status === 200) await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(status).toBe(404);
+  });
+
+  it("carries a sale across: the merged item is sold and its other live listing needs ending", async () => {
+    const { token } = await signUp();
+    const { data: a } = await call<ItemWithListings>("/api/items", { token, json: { title: "Zara linen shirt white", size: "L" } });
+    const { data: b } = await call<ItemWithListings>("/api/items", { token, json: { title: "Zara linen shirt white L", size: "L" } });
+    await call(`/api/items/${a.id}/listings/ebay`, { token, method: "PUT", json: { status: "listed", externalId: "999999999" } });
+    await call(`/api/items/${b.id}/listings/vinted`, { token, method: "PUT", json: { status: "listed", externalId: "5" } });
+    await call(`/api/items/${b.id}/sold`, { token, json: { marketplace: "vinted" } });
+    const merged = await call<ItemWithListings>(`/api/items/${a.id}/merge`, { token, json: { otherId: b.id } });
+    expect(merged.data).toMatchObject({ status: "sold", quantity: 0 });
+    expect(Object.fromEntries(merged.data.listings.map((l) => [l.marketplace, l.status]))).toEqual({ ebay: "ending", vinted: "sold" });
+  });
+
+  it("refuses to merge two live listings on one site, and remembers 'not duplicates'", async () => {
+    const { token } = await signUp();
+    const { data: a } = await call<ItemWithListings>("/api/items", { token, json: { title: "Penguin Modern Classics Orwell 1984" } });
+    const { data: b } = await call<ItemWithListings>("/api/items", { token, json: { title: "Orwell 1984 Penguin Modern Classics" } });
+    expect((await call<{ pairs: DuplicatePair[] }>("/api/duplicates", { token })).data.pairs).toHaveLength(1);
+
+    await call(`/api/items/${a.id}/listings/vinted`, { token, method: "PUT", json: { status: "listed", externalId: "1" } });
+    await call(`/api/items/${b.id}/listings/vinted`, { token, method: "PUT", json: { status: "listed", externalId: "2" } });
+    const conflict = await call<{ error: string }>(`/api/items/${a.id}/merge`, { token, json: { otherId: b.id } });
+    expect(conflict.status).toBe(409);
+    expect(conflict.data.error).toMatch(/Both items have a Vinted listing/);
+    expect((await call(`/api/items/${a.id}/merge`, { token, json: { otherId: a.id } })).status).toBe(400);
+    expect((await call(`/api/items/${a.id}/merge`, { token, json: { otherId: "nope" } })).status).toBe(404);
+
+    await call(`/api/items/${b.id}/listings/vinted`, { token, method: "DELETE" });
+    expect((await call<{ pairs: DuplicatePair[] }>("/api/duplicates", { token })).data.pairs).toHaveLength(1);
+    expect((await call("/api/duplicates/dismiss", { token, json: { a: b.id, b: a.id } })).status).toBe(204);
+    expect((await call<{ pairs: DuplicatePair[] }>("/api/duplicates", { token })).data.pairs).toHaveLength(0);
+  });
+
+  it("doesn't flag a deliberate copy made with Duplicate", async () => {
+    const { token } = await signUp();
+    const { data: a } = await call<ItemWithListings>("/api/items", { token, json: { title: "The Hobbit paperback Tolkien" } });
+    await call(`/api/items/${a.id}/duplicate`, { token, method: "POST" });
+    expect((await call<{ pairs: DuplicatePair[] }>("/api/duplicates", { token })).data.pairs).toHaveLength(0);
   });
 });

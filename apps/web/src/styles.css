@@ -449,3 +449,20 @@ label.checkbox input { width: 1rem; }
 .legal h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; }
 .legal ul { padding-left: 1.25rem; display: grid; gap: 0.4rem; }
 .footer-links { display: inline-flex; gap: 1rem; }
+
+/* ==========================================================================
+   Duplicates
+   ========================================================================== */
+.dup-list { transition: opacity 0.15s; }
+.dup-list.loading { opacity: 0.6; }
+.dup-why { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-bottom: 0.9rem; }
+.dup-why .badge { text-transform: none; }
+.dup-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 0.9rem; }
+.dup-item { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 0.9rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.dup-item .thumb { border-radius: 8px; }
+.dup-body { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+.dup-body .item-title { color: var(--text); }
+.dup-body button { align-self: flex-start; margin-top: 0.3rem; }
+@media (max-width: 700px) {
+  .dup-items { grid-template-columns: 1fr; }
+}

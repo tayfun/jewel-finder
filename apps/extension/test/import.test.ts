@@ -263,7 +263,8 @@ describe("import panel", () => {
         sendMessage: vi.fn(async (req: Request) => {
           sent.push(req);
           if (req.type === "IMPORT_KNOWN") return { ok: true, data: known };
-          if (req.type === "IMPORT_LISTING") return { ok: true, data: { itemId: `item-${req.listing.externalId}`, created: true, photos: req.listing.photos.length } };
+          if (req.type === "IMPORT_LISTING")
+            return { ok: true, data: { itemId: `item-${req.listing.externalId}`, created: true, photos: req.listing.photos.length, possibleDuplicate: true } };
           return { ok: true, data: null };
         }),
       },
@@ -323,6 +324,7 @@ describe("import panel", () => {
     const summary = panel.root.querySelector(".footer")!.textContent!;
     expect(summary).toContain("Imported 1 · 1 failed");
     expect(summary).toContain("Hoodie 3: This listing no longer exists");
+    expect(summary).toContain("1 looks like an item you already had (maybe from eBay). Review duplicates");
     expect(rows(panel)[0]!.textContent).toContain("In Jewel Finder");
     panel.close();
   });

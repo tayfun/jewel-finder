@@ -3,7 +3,11 @@ import { DurableObject } from "cloudflare:workers";
 import {
   ITEM_STATUSES,
   MARKETPLACES,
+  MARKETPLACE_LABELS,
   Settings,
+  findDuplicatePairs,
+  pairKey,
+  type DuplicatePair,
   type Account,
   type Item,
   type ItemData,
@@ -70,6 +74,8 @@ const MIGRATIONS = [
    ALTER TABLE items ADD COLUMN weight_grams INTEGER;`,
   // v4: look listings up by their marketplace id (imports de-duplicate on it).
   `CREATE INDEX listings_external ON listings(marketplace, external_id);`,
+  // v5: pairs the seller said aren't duplicates (a < b).
+  `CREATE TABLE not_duplicates (a TEXT NOT NULL, b TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (a, b));`,
 ];
 
 type Row = Record<string, SqlStorageValue>;
@@ -114,6 +120,10 @@ function toListing(r: Row): Listing {
     updatedAt: r.updated_at as number,
   };
 }
+
+export type MergeResult =
+  | { ok: true; item: ItemWithListings; removedImages: string[] }
+  | { ok: false; status: 400 | 404 | 409; error: string };
 
 export type RegisterResult = { ok: true; account: Account } | { ok: false; error: "exists" };
 
@@ -275,20 +285,13 @@ class AccountDOBase extends DurableObject<Env> {
     return id;
   }
 
-  /** Returns the updated item plus image keys that are no longer referenced. */
-  async updateItem(
-    id: string,
-    patch: ItemPatch,
-  ): Promise<{ item: ItemWithListings; removedImages: string[] } | null> {
-    const current = await this.getItem(id);
-    if (!current) return null;
-    const next = { ...current, ...patch };
+  private writeItem(id: string, next: Omit<Item, "id" | "createdAt" | "updatedAt">) {
     this.db().exec(
       `UPDATE items SET sku = ?, title = ?, description = ?, brand = ?, category = ?, size = ?, colour = ?,
          condition = ?, price = ?, cost = ?, quantity = ?, status = ?, images = ?, tags = ?, notes = ?,
          book = ?, package_size = ?, weight_grams = ?, updated_at = ?
        WHERE id = ?`,
-      next.sku || current.sku,
+      next.sku,
       next.title,
       next.description,
       next.brand,
@@ -309,6 +312,17 @@ class AccountDOBase extends DurableObject<Env> {
       Date.now(),
       id,
     );
+  }
+
+  /** Returns the updated item plus image keys that are no longer referenced. */
+  async updateItem(
+    id: string,
+    patch: ItemPatch,
+  ): Promise<{ item: ItemWithListings; removedImages: string[] } | null> {
+    const current = await this.getItem(id);
+    if (!current) return null;
+    const next = { ...current, ...patch };
+    this.writeItem(id, { ...next, sku: next.sku || current.sku });
     const removedImages = current.images.filter((k) => !next.images.includes(k));
     return { item: (await this.getItem(id))!, removedImages };
   }
@@ -320,6 +334,7 @@ class AccountDOBase extends DurableObject<Env> {
     this.ctx.storage.transactionSync(() => {
       this.db().exec("DELETE FROM listings WHERE item_id = ?", id);
       this.db().exec("DELETE FROM items WHERE id = ?", id);
+      this.db().exec("DELETE FROM not_duplicates WHERE a = ? OR b = ?", id, id);
     });
     return item.images;
   }
@@ -432,7 +447,97 @@ class AccountDOBase extends DurableObject<Env> {
         results.push({ externalId: l.externalId, itemId, created: true });
       });
     }
-    return { results, skippedImages };
+    const created = new Set(results.filter((r) => r.created).map((r) => r.itemId));
+    const possibleDuplicates = created.size
+      ? [...new Set((await this.findDuplicates()).flatMap((p) => [p.a.id, p.b.id]).filter((id) => created.has(id)))]
+      : [];
+    return { results, possibleDuplicates, skippedImages };
+  }
+
+  // ------------------------------------------------------------- duplicates
+
+  /** Likely duplicate pairs, best first; only those involving `itemId` when given. */
+  async findDuplicates(itemId?: string): Promise<DuplicatePair[]> {
+    const dismissed = new Set(
+      this.db()
+        .exec<{ a: string; b: string }>("SELECT a, b FROM not_duplicates")
+        .toArray()
+        .map((r) => pairKey(r.a, r.b)),
+    );
+    return findDuplicatePairs(await this.listItems(), dismissed, itemId ? new Set([itemId]) : undefined);
+  }
+
+  async dismissDuplicate(a: string, b: string): Promise<void> {
+    const [x, y] = a < b ? [a, b] : [b, a];
+    this.db().exec("INSERT OR IGNORE INTO not_duplicates (a, b, created_at) VALUES (?, ?, ?)", x, y, Date.now());
+  }
+
+  /**
+   * Folds `otherId` into `targetId` and deletes it. The target keeps its own details and fills
+   * blanks from the other; tags are combined; listings move across. If either had sold, the
+   * merged item is sold and its other live listings need ending.
+   */
+  async mergeItems(targetId: string, otherId: string): Promise<MergeResult> {
+    if (targetId === otherId) return { ok: false, status: 400, error: "Pick two different items" };
+    const target = await this.getItem(targetId);
+    const other = await this.getItem(otherId);
+    if (!target || !other) return { ok: false, status: 404, error: "Item not found" };
+
+    const ACTIVE = new Set(["listed", "ending", "sold"]);
+    const move: string[] = [];
+    const replace: string[] = [];
+    for (const l of other.listings) {
+      const mine = target.listings.find((t) => t.marketplace === l.marketplace);
+      if (!mine) move.push(l.id);
+      else if (ACTIVE.has(mine.status) && ACTIVE.has(l.status)) {
+        const site = MARKETPLACE_LABELS[l.marketplace];
+        return { ok: false, status: 409, error: `Both items have a ${site} listing. End or remove one of them first.` };
+      } else if (ACTIVE.has(l.status)) {
+        replace.push(mine.id);
+        move.push(l.id);
+      }
+    }
+
+    const sold = target.status === "sold" || other.status === "sold";
+    const notes = [...new Set([target.notes.trim(), other.notes.trim()].filter(Boolean))].join("\n\n").slice(0, 2000);
+    const images = target.images.length ? target.images : other.images;
+    const merged = {
+      sku: target.sku,
+      title: target.title,
+      description: target.description || other.description,
+      brand: target.brand || other.brand,
+      category: target.category || other.category,
+      size: target.size || other.size,
+      colour: target.colour || other.colour,
+      condition: target.condition ?? other.condition,
+      price: target.price ?? other.price,
+      cost: target.cost ?? other.cost,
+      quantity: sold ? 0 : target.quantity,
+      status: sold ? ("sold" as const) : target.status === "draft" && other.status === "in_stock" ? "in_stock" : target.status,
+      images,
+      tags: [...new Set([...target.tags, ...other.tags])].slice(0, 30),
+      notes,
+      book: target.book ?? other.book,
+      packageSize: target.packageSize ?? other.packageSize,
+      weightGrams: target.weightGrams ?? other.weightGrams,
+    };
+
+    const now = Date.now();
+    this.ctx.storage.transactionSync(() => {
+      const db = this.db();
+      this.writeItem(targetId, merged);
+      for (const id of replace) db.exec("DELETE FROM listings WHERE id = ?", id);
+      for (const id of move) db.exec("UPDATE listings SET item_id = ?, updated_at = ? WHERE id = ?", targetId, now, id);
+      if (sold) {
+        // Same as marking it sold: whatever is still live elsewhere must come down.
+        db.exec("UPDATE listings SET status = 'ending', updated_at = ? WHERE item_id = ? AND status = 'listed'", now, targetId);
+        db.exec("UPDATE listings SET status = 'ended', updated_at = ? WHERE item_id = ? AND status = 'pending'", now, targetId);
+      }
+      db.exec("DELETE FROM listings WHERE item_id = ?", otherId);
+      db.exec("DELETE FROM items WHERE id = ?", otherId);
+      db.exec("DELETE FROM not_duplicates WHERE a = ? OR b = ?", otherId, otherId);
+    });
+    return { ok: true, item: (await this.getItem(targetId))!, removedImages: other.images.filter((k) => !images.includes(k)) };
   }
 
   async deleteListing(itemId: string, marketplace: Marketplace): Promise<boolean> {
@@ -464,7 +569,8 @@ class AccountDOBase extends DurableObject<Env> {
       )
       .one();
     const toEnd = db.exec<{ n: number }>("SELECT COUNT(*) AS n FROM listings WHERE status = 'ending'").one().n;
-    return { byStatus, listed, stockValue: value.v ?? 0, stockCost: value.c ?? 0, toEnd };
+    const duplicates = (await this.findDuplicates()).length;
+    return { byStatus, listed, stockValue: value.v ?? 0, stockCost: value.c ?? 0, toEnd, duplicates };
   }
 }
 

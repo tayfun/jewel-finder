@@ -121,6 +121,8 @@ interface Run {
   created: number;
   skipped: number;
   withoutPhotos: number;
+  /** New items that look like ones already in the inventory. */
+  duplicates: number;
   failed: { title: string; error: string }[];
   stopping: boolean;
   finished: boolean;
@@ -204,7 +206,7 @@ export class ImportPanel {
   async importSelected() {
     const queue = this.cards.filter((c) => this.selected.has(c.externalId) && !this.known[c.externalId]);
     if (!queue.length) return;
-    const run: Run = { total: queue.length, done: 0, current: "", created: 0, skipped: 0, withoutPhotos: 0, failed: [], stopping: false, finished: false };
+    const run: Run = { total: queue.length, done: 0, current: "", created: 0, skipped: 0, withoutPhotos: 0, duplicates: 0, failed: [], stopping: false, finished: false };
     this.run = run;
     for (const card of queue) {
       if (run.stopping) break;
@@ -219,6 +221,7 @@ export class ImportPanel {
         else {
           run.created++;
           if (listing.photos.length && !result.photos) run.withoutPhotos++;
+          if (result.possibleDuplicate) run.duplicates++;
         }
       } catch (e) {
         run.failed.push({ title: card.title, error: (e as Error).message });
@@ -362,6 +365,16 @@ export class ImportPanel {
         footer.append(h("p", {}, h("strong", {}, parts.join(" · "))));
         if (run.withoutPhotos) {
           footer.append(h("p", { class: "warn small" }, `${run.withoutPhotos} came in without photos. Add them on the item page.`));
+        }
+        if (run.duplicates) {
+          footer.append(
+            h(
+              "p",
+              { class: "warn small" },
+              `${run.duplicates} look${run.duplicates === 1 ? "s" : ""} like ${run.duplicates === 1 ? "an item" : "items"} you already had (maybe from ${this.adapter.marketplace === "vinted" ? "eBay" : "Vinted"}). `,
+              h("a", { href: `${API_URL}/duplicates`, target: "_blank" }, "Review duplicates ↗"),
+            ),
+          );
         }
         if (run.failed.length) {
           footer.append(h("ul", { class: "failed small" }, ...run.failed.map((f) => h("li", { class: "error" }, `${f.title}: ${f.error}`))));

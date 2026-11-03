@@ -58,6 +58,8 @@ own "sell an item" form (no marketplace APIs — Vinted has none, and we don't w
   - `package_size` (`large_letter | small | medium | large`) and `weight_grams` (packed), migration v3.
     Each marketplace's own size is derived at fill time, bumped up a band when the weight is over its
     limit (eBay UK: large letter 1 kg, small 2 kg, medium 20 kg; Vinted: small 2 kg, medium 5 kg)
+- **not_duplicates** (migration v5): `a, b, created_at`, a < b — pairs the seller said are different
+  items. "Duplicate" (restock) records one for the source and its copy.
 - **listings**: `id, item_id, marketplace (vinted|ebay), status (pending|listed|sold|ended|failed),
   external_id, url, price, error, created_at, updated_at` — unique on `(item_id, marketplace)`
 
@@ -78,6 +80,9 @@ POST   /api/items/:id/sold     {marketplace?}              → item   (marks oth
 POST   /api/items/:id/autofill                          → {suggestion} (Gemini, not saved)
 POST   /api/items/import       {marketplace, listings[≤50]} → {results: [{externalId, itemId, created}]}
 GET    /api/listings?marketplace=                          → {listings}  (what's already imported)
+POST   /api/items/:id/merge    {otherId}                   → item   (409: both live on one marketplace)
+GET    /api/duplicates?itemId=                             → {pairs: [{a, b, score, reasons}]}
+POST   /api/duplicates/dismiss {a, b}                      → 204    ("not duplicates", remembered)
 PUT    /api/items/:id/listings/:marketplace  ListingInput  → listing (upsert)
 DELETE /api/items/:id/listings/:marketplace                → 204
 GET    /api/stats                                          → counts + stock value
@@ -126,13 +131,23 @@ GET    /images/:key                                        → image bytes (publ
    skipping (and deleting the photos of) any `(marketplace, external_id)` already there. Sold listings
    come in as sold items; ended eBay listings as in-stock items with an ended listing.
 
+8. **Duplicate detection.** `findDuplicatePairs` (shared) compares items that share a title word or
+   ISBN. Title similarity (0.7 × containment + 0.3 × Jaccard of meaningful words; eBay titles add
+   keywords to Vinted's) is the base; a shared ISBN scores ≥ 0.95; brand, size, author, price, colour and
+   being live on *different* marketplaces add or subtract. Ruled out: different ISBN, author, brand or
+   size ("S" ≠ "XS", "W32" ~ "W32 L30"), both live on the same marketplace (an item holds one listing per
+   site), both sold, or either archived. Pairs ≥ 0.8 show up: a count on the inventory page (`Stats`), a
+   note on the item page, the import panel's summary, and `/duplicates` to review. Merging keeps the chosen
+   item's details and photos, fills its blanks, unions tags, moves listings (refusing two live ones on one
+   site) and, if either had sold, marks it sold and flags the rest for ending.
+
 Selectors live in one adapter file per marketplace with multiple fallback strategies
 (test ids → names → label text → placeholders) because marketplace DOMs change without notice.
 
 ## 5. Implementation steps
 
 Status (2026-11-03): steps 1–5 are implemented and deployed, along with AI auto-fill, Sentry, package
-sizes, the extension install page and the privacy policy. Cross-delisting and imports are built but not deployed. Tests: shared 13, API 18 (in workerd), extension 32
+sizes, the extension install page and the privacy policy. Cross-delisting and imports are built but not deployed. Tests: shared 21, API 22 (in workerd), extension 32
 (happy-dom, incl. a real React-controlled form). The web app was exercised end to end in a browser.
 Live marketplace checks so far: one eBay listing was tried with the production extension; the
 description fix was built from the real eBay form. Still unverified live: eBay's package size picker (only its summary button was

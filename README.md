@@ -53,6 +53,13 @@ and photos (JSON-LD and meta tags first, then the page's markup; eBay's descript
 `ebaydesc.com` frame). The background copies the photos into R2 and `POST /api/items/import` creates the
 item with a `listed` (or `sold`/`ended`) listing, de-duplicated on the marketplace's listing id.
 
+Duplicates: items that look like the same thing entered twice (typically imported from both Vinted and
+eBay) are flagged on the inventory page, on the item page and in the import panel, and reviewed at
+`/duplicates`. "Keep this one" merges the pair: the kept item keeps its details and photos, fills blanks
+from the other, combines tags and takes over its listings; if either had sold, the merged item is sold and
+its other live listings need ending. "Not duplicates" is remembered. The scoring (title words, ISBN,
+brand, size, author, price, which marketplaces each is live on) is in `packages/shared/src/duplicates.ts`.
+
 The marketplace selectors live in `apps/extension/src/content/{vinted,ebay}.ts` (import readers: `vintedImporter` /
 `ebayImporter`; shared page-reading helpers in `src/lib/scrape.ts`). Marketplaces change their DOM
 regularly — that's the first place to look when a field stops filling or an import comes in thin.

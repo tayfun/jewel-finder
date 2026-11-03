@@ -10,6 +10,7 @@ import { Home } from "./pages/Home";
 import { ItemDetail } from "./pages/ItemDetail";
 import { EditItem, NewItem } from "./pages/ItemEditor";
 import { Extension } from "./pages/Extension";
+import { Duplicates } from "./pages/Duplicates";
 import { Import } from "./pages/Import";
 import { Privacy } from "./pages/Privacy";
 import { Settings } from "./pages/Settings";
@@ -35,6 +36,7 @@ const router = createRouter([
       { path: "/settings", element: <Settings /> },
       { path: "/extension", element: <Extension /> },
       { path: "/import", element: <Import /> },
+      { path: "/duplicates", element: <Duplicates /> },
     ],
   },
     ],

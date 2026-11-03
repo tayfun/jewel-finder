@@ -1,16 +1,19 @@
 import {
   Credentials,
+  DismissDuplicateRequest,
   ImportRequest,
   ItemInput,
   ItemPatch,
   ItemStatus,
   ListingInput,
   Marketplace,
+  MergeRequest,
   SettingsPatch,
   imageUrl,
   type ApiError,
   type AuthResponse,
   type AutofillSuggestion,
+  type DuplicatePair,
   type ImportResult,
 } from "@jf/shared";
 import * as Sentry from "@sentry/cloudflare";
@@ -165,10 +168,10 @@ app.post("/api/items", async (c) => {
 app.post("/api/items/import", async (c) => {
   const { marketplace, listings } = parse(ImportRequest, await body(c));
   assertOwnImages(c.var.userId, listings.flatMap((l) => l.item.images));
-  const { results, skippedImages } = await c.var.account.importListings(marketplace, listings);
+  const { results, possibleDuplicates, skippedImages } = await c.var.account.importListings(marketplace, listings);
   // Already imported: the photos just uploaded for it aren't needed.
   if (skippedImages.length) c.executionCtx.waitUntil(c.env.IMAGES.delete(skippedImages));
-  return c.json<ImportResult>({ results });
+  return c.json<ImportResult>({ results, possibleDuplicates });
 });
 
 app.get("/api/items/:id", async (c) => {
@@ -209,7 +212,32 @@ app.post("/api/items/:id/duplicate", async (c) => {
     // Duplicating a sold item (quantity 0) is how you restock it.
     quantity: Math.max(1, source.quantity),
   });
-  return c.json(await c.var.account.createItem({ ...input, status: "draft" }), 201);
+  const copy = await c.var.account.createItem({ ...input, status: "draft" });
+  // A copy is a deliberate second one (restocking), not a duplicate to flag.
+  await c.var.account.dismissDuplicate(source.id, copy.id);
+  return c.json(copy, 201);
+});
+
+// Folds another item (photos only if this one has none, missing details, tags, listings) into this one.
+app.post("/api/items/:id/merge", async (c) => {
+  const { otherId } = parse(MergeRequest, await body(c));
+  const result = await c.var.account.mergeItems(c.req.param("id"), otherId);
+  if (!result.ok) throw new HTTPException(result.status, { message: result.error });
+  if (result.removedImages.length) c.executionCtx.waitUntil(c.env.IMAGES.delete(result.removedImages));
+  return c.json(result.item);
+});
+
+// ------------------------------------------------------------- duplicates
+
+app.get("/api/duplicates", async (c) => {
+  const itemId = c.req.query("itemId") || undefined;
+  return c.json<{ pairs: DuplicatePair[] }>({ pairs: await c.var.account.findDuplicates(itemId) });
+});
+
+app.post("/api/duplicates/dismiss", async (c) => {
+  const { a, b } = parse(DismissDuplicateRequest, await body(c));
+  await c.var.account.dismissDuplicate(a, b);
+  return c.body(null, 204);
 });
 
 app.post("/api/items/:id/sold", async (c) => {

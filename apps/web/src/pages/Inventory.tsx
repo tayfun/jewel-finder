@@ -69,6 +69,16 @@ export function Inventory() {
         </p>
       )}
 
+      {s && s.duplicates > 0 && (
+        <p className="notice">
+          <strong>
+            {s.duplicates} possible duplicate{s.duplicates === 1 ? "" : "s"}
+          </strong>{" "}
+          — items that look like the same thing entered twice, e.g. imported from both Vinted and eBay.{" "}
+          <Link to="/duplicates">Review</Link>
+        </p>
+      )}
+
       <div className="toolbar">
         <input
           type="search"

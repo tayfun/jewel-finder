@@ -6,6 +6,7 @@ import {
   PACKAGE_SIZE_LABELS,
   formatMoney,
   parseListingUrl,
+  type DuplicatePair,
   type ItemWithListings,
   type Listing,
   type Marketplace,
@@ -31,6 +32,10 @@ export function ItemDetail() {
   const [autofill, setAutofill] = useState(false);
   const [viewer, setViewer] = useState(false);
   const extension = useExtension();
+  const duplicates = useLoad(
+    () => api<{ pairs: DuplicatePair[] }>(`/api/duplicates?itemId=${id}`).then((r) => r.pairs),
+    [id],
+  );
   const imageCount = item?.images.length ?? 0;
 
   // ←/→ step through photos on the page too (the lightbox handles its own keys while open).
@@ -155,6 +160,21 @@ export function ItemDetail() {
         </div>
       </div>
       {actionError && <p className="error">{actionError}</p>}
+      {!!duplicates.data?.length && (
+        <p className="notice">
+          This looks like{" "}
+          {duplicates.data.map((p, i) => {
+            const other = p.a.id === item.id ? p.b : p.a;
+            return (
+              <span key={other.id}>
+                {i > 0 && ", "}
+                <Link to={`/items/${other.id}`}>{other.title}</Link>
+              </span>
+            );
+          })}
+          , already in your inventory. <Link to="/duplicates">Review duplicates</Link>
+        </p>
+      )}
       {autofill && (
         <Autofill
           item={item}

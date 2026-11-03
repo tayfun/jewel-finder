@@ -95,7 +95,8 @@ export interface Responses {
   GET_IMPORT: { job: ImportJob; settings: Settings } | null;
   IMPORT_STOP: null;
   IMPORT_KNOWN: Record<string, string>;
-  IMPORT_LISTING: { itemId: string; created: boolean; photos: number };
+  /** possibleDuplicate: the new item looks like one already in the inventory. */
+  IMPORT_LISTING: { itemId: string; created: boolean; photos: number; possibleDuplicate: boolean };
   FETCH_DESCRIPTION: string;
 }
 
