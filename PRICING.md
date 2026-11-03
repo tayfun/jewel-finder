@@ -138,7 +138,7 @@ Deterministic rules decide the number; Gemini helps with judgement where text ma
 ## 9. Build order
 
 1. **Shared core** — `specialFeatures`, comp feature extraction, relevance, `priceQueries`,
-   `priceSummary` with unit tests. *(started)*
+   `priceSummary` with unit tests. *(done: `packages/shared/src/pricing.ts`)*
 2. **Extension** — `comps` job, eBay search-results and Vinted catalog parsers (fixtures), background
    orchestration, `PRICE_CHECK` bridge message.
 3. **API** — `price_checks` table, endpoints, tests.

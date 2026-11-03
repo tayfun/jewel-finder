@@ -60,7 +60,7 @@ export function titleSimilarity(a: Set<string>, b: Set<string>): number {
 const sameText = (a: string, b: string) => fold(a).replace(/[^a-z0-9]/g, "") === fold(b).replace(/[^a-z0-9]/g, "");
 
 /** Sizes agree when they share a token or a number: "W32" ~ "W32 L30" ~ "32", but "S" ≁ "XS". */
-function sizesAgree(a: string, b: string): boolean {
+export function sizesAgree(a: string, b: string): boolean {
   const parts = (s: string) => {
     const tokens = fold(s).split(/[^a-z0-9]+/).filter(Boolean);
     return new Set([...tokens, ...tokens.flatMap((t) => t.match(/\d+/g) ?? [])]);
