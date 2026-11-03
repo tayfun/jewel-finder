@@ -41,7 +41,13 @@ let started = false;
 /** Shows the import panel in tabs that are in import mode (set by the web app or side panel). */
 export async function runImport(adapter: Adapter): Promise<void> {
   chrome.runtime.onMessage.addListener((msg: TabMessage, sender, sendResponse) => {
-    if (sender.id !== chrome.runtime.id || msg?.type !== "IMPORT_ACTIVATE") return false;
+    if (sender.id !== chrome.runtime.id) return false;
+    // Lets the side panel tell which marketplace a tab is on without the "tabs" permission.
+    if (msg?.type === "WHICH_MARKETPLACE") {
+      sendResponse(adapter.marketplace);
+      return false;
+    }
+    if (msg?.type !== "IMPORT_ACTIVATE") return false;
     sendResponse(true);
     start(adapter);
     return false;

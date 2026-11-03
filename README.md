@@ -222,7 +222,7 @@ To publish it:
 2. **New item** → upload the zip. Fill in the listing: description, category (Productivity), a 128×128 icon
    (`apps/extension/icons/128.png`), at least one 1280×800 screenshot, and a privacy policy URL.
 3. On the **Privacy** tab, explain each permission: `storage` (sign-in token), `sidePanel` (the UI),
-   `tabs` (opening Vinted/eBay sell pages), host access to the Worker (your inventory), to Vinted/eBay
+   host access to the Worker (your inventory), to Vinted/eBay
    (filling in their listing forms, reading the seller's listings to import), and to `*.vinted.net`,
    `i.ebayimg.com` and `*.ebaydesc.com` (downloading the photos and eBay descriptions of listings the
    seller imports). Declare that it handles authentication info and website content, and

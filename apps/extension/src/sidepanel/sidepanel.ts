@@ -12,7 +12,7 @@ import {
   type PriceCheck,
 } from "@jf/shared";
 import { API_URL } from "../config";
-import { send } from "../messages";
+import { send, type TabMessage } from "../messages";
 
 const app = document.getElementById("app")!;
 
@@ -67,16 +67,28 @@ async function load() {
   }
 }
 
+/**
+ * The current tab's id when it's on `marketplace`. Asks the tab's content script rather than reading
+ * its URL, which would need the "tabs" permission ("Read your browsing history").
+ */
+async function tabOn(marketplace: Marketplace): Promise<number | undefined> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id == null) return undefined;
+  try {
+    const on = await chrome.tabs.sendMessage(tab.id, { type: "WHICH_MARKETPLACE" } satisfies TabMessage);
+    return on === marketplace ? tab.id : undefined;
+  } catch {
+    return undefined; // not a marketplace page (no content script to answer)
+  }
+}
+
 /** Import mode in the current tab when it's on that marketplace, otherwise a new tab on your listings. */
 async function startImport(marketplace: Marketplace) {
   busy = `import:${marketplace}`;
   error = "";
   render();
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const host = tab?.url ? new URL(tab.url).hostname : "";
-    const here = marketplace === "vinted" ? /(^|\.)vinted\./.test(host) : /(^|\.)ebay\./.test(host);
-    await send({ type: "START_IMPORT", marketplace, tabId: here ? tab?.id : undefined });
+    await send({ type: "START_IMPORT", marketplace, tabId: await tabOn(marketplace) });
   } catch (e) {
     error = (e as Error).message;
   } finally {

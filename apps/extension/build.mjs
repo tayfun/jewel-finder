@@ -32,7 +32,7 @@ const manifest = {
   action: { default_title: "Jewel Finder" },
   side_panel: { default_path: "sidepanel.html" },
   background: { service_worker: "background.js", type: "module" },
-  permissions: ["storage", "sidePanel", "tabs"],
+  permissions: ["storage", "sidePanel"],
   // The Worker (your inventory); for imports, Vinted's and eBay's photo CDNs and eBay's description frames.
   host_permissions: [`${API_URL}/*`, "https://*.vinted.net/*", "https://i.ebayimg.com/*", "https://*.ebaydesc.com/*"],
   content_scripts: [

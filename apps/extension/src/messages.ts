@@ -60,7 +60,10 @@ export interface ScrapedListing {
 }
 
 /** Sent by the background to a tab's content script (chrome.tabs.sendMessage). */
-export type TabMessage = { type: "IMPORT_ACTIVATE" };
+export type TabMessage =
+  | { type: "IMPORT_ACTIVATE" }
+  /** Which marketplace this tab's content script is for (answers with a Marketplace). */
+  | { type: "WHICH_MARKETPLACE" };
 
 /** Messages handled by the background service worker. */
 export type Request =
