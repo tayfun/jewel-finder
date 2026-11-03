@@ -17,6 +17,11 @@ window.addEventListener("message", (e: MessageEvent<WebToExtension>) => {
       () => reply({ source: BRIDGE_EXT, type: "LIST_RESULT", requestId: msg.requestId, ok: true }),
       (err: Error) => reply({ source: BRIDGE_EXT, type: "LIST_RESULT", requestId: msg.requestId, ok: false, error: err.message }),
     );
+  } else if (msg.type === "PRICE_CHECK") {
+    send({ type: "START_PRICE_CHECK", itemId: msg.itemId, token: msg.token || undefined }).then(
+      () => reply({ source: BRIDGE_EXT, type: "LIST_RESULT", requestId: msg.requestId, ok: true }),
+      (err: Error) => reply({ source: BRIDGE_EXT, type: "LIST_RESULT", requestId: msg.requestId, ok: false, error: err.message }),
+    );
   } else if (msg.type === "RELIST_ITEM") {
     send({ type: "START_RELISTING", itemId: msg.itemId, marketplace: msg.marketplace, token: msg.token || undefined }).then(
       () => reply({ source: BRIDGE_EXT, type: "LIST_RESULT", requestId: msg.requestId, ok: true }),

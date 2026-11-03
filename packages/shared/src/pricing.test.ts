@@ -121,6 +121,7 @@ describe("maths", () => {
     expect(quantile([10, 20], 0.5, [3, 1])).toBeLessThan(15);
     expect(withoutOutliers([10, 11, 12, 12, 13, 95].map((price) => ({ price }))).map((c) => c.price)).toEqual([10, 11, 12, 12, 13]);
     expect([nicePrice(1234), nicePrice(4567), nicePrice(12_345), nicePrice(10)]).toEqual([1250, 4600, 12_500, 50]);
+    expect([nicePrice(212_340), nicePrice(1_212_500)]).toEqual([210_000, 1_210_000]);
   });
 });
 

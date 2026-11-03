@@ -256,6 +256,26 @@ export interface ImportResult {
   possibleDuplicates: string[];
 }
 
+export const CompInput = z.object({
+  source: z.enum(["ebay_sold", "ebay_listed", "vinted_listed"]),
+  title: z.string().trim().min(1).max(300),
+  price: z.int().min(0).max(100_000_000),
+  url: z.url().max(1000),
+  soldAt: z.int().nullable().optional(),
+  condition: z.string().max(100).optional(),
+  size: z.string().max(60).optional(),
+  imageUrl: z.url().max(1000).nullable().optional(),
+  exact: z.boolean().optional(),
+});
+
+/** What the extension found for an item's price check. */
+export const PriceCheckInput = z.object({
+  queries: z.array(z.string().max(200)).max(10),
+  comps: z.array(CompInput).max(400),
+  problems: z.array(z.string().max(300)).max(20).default([]),
+});
+export type PriceCheckInput = z.input<typeof PriceCheckInput>;
+
 /** Merge `otherId` into the item in the URL; the other item is deleted. */
 export const MergeRequest = z.object({ otherId: z.string().min(1).max(100) });
 

@@ -63,13 +63,26 @@ export function importViaExtension(marketplace: Marketplace): Promise<void> {
   return request("IMPORT_LISTINGS", "", marketplace);
 }
 
-function request(type: "LIST_ITEM" | "DELIST_ITEM" | "RELIST_ITEM" | "IMPORT_LISTINGS", itemId: string, marketplace: Marketplace): Promise<void> {
+/**
+ * Asks the extension to search eBay and Vinted for comparables and save a price check. Resolves once
+ * it's saved, which takes a minute or so: each search opens in a background tab.
+ */
+export function priceCheckViaExtension(itemId: string): Promise<void> {
+  return request("PRICE_CHECK", itemId, "ebay", 5 * 60_000);
+}
+
+function request(
+  type: "LIST_ITEM" | "DELIST_ITEM" | "RELIST_ITEM" | "IMPORT_LISTINGS" | "PRICE_CHECK",
+  itemId: string,
+  marketplace: Marketplace,
+  timeoutMs = 5000,
+): Promise<void> {
   const requestId = crypto.randomUUID();
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       off();
       reject(new Error("The Jewel Finder extension didn't respond. Is it installed and enabled?"));
-    }, 5000);
+    }, timeoutMs);
     const off = onMessage((msg) => {
       if (msg.type !== "LIST_RESULT" || msg.requestId !== requestId) return;
       clearTimeout(timer);
@@ -78,6 +91,12 @@ function request(type: "LIST_ITEM" | "DELIST_ITEM" | "RELIST_ITEM" | "IMPORT_LIS
       else reject(new Error(msg.error ?? "The extension couldn't open the marketplace"));
     });
     const token = getToken() ?? "";
-    post(type === "IMPORT_LISTINGS" ? { source: BRIDGE_WEB, type, requestId, marketplace, token } : { source: BRIDGE_WEB, type, requestId, itemId, marketplace, token });
+    post(
+      type === "IMPORT_LISTINGS"
+        ? { source: BRIDGE_WEB, type, requestId, marketplace, token }
+        : type === "PRICE_CHECK"
+          ? { source: BRIDGE_WEB, type, requestId, itemId, token }
+          : { source: BRIDGE_WEB, type, requestId, itemId, marketplace, token },
+    );
   });
 }

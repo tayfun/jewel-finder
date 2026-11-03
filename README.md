@@ -2,7 +2,7 @@
 
 Inventory for eBay / Vinted resellers, with a Chrome extension that fills in the marketplaces'
 own listing forms, ends listings elsewhere when something sells, relists stale listings to bump them
-back to the top, and imports the listings you already have. See [PLAN.md](PLAN.md) for the architecture, API and roadmap.
+back to the top, imports the listings you already have, and prices items from comparable sales. See [PLAN.md](PLAN.md) for the architecture, API and roadmap.
 
 ```
 apps/api        Cloudflare Worker (Hono) + AccountDO Durable Object (SQLite) + R2 photos; also serves the web app
@@ -49,6 +49,29 @@ extension records the listing URL back in your inventory.
 Mark an item sold ("Sold on Vinted/eBay/elsewhere") → its other live listings become "Needs ending" and
 the extension opens each one → it gets the delete/end step ready (Vinted: Delete; eBay: End listing with
 a reason) and you confirm → once the listing is gone it's marked ended.
+
+### Pricing from comparables
+
+The **Pricing** card on each item page shows its collectable features (first edition, signed, limited,
+rare, proof, dust jacket, format) with the evidence on hover, and **💷 Check prices** works out a price
+from comparable items. Full design: [PRICING.md](PRICING.md).
+
+- **Searching:** the extension opens eBay *sold* searches first, then eBay Buy It Now and Vinted listings,
+  each in a background tab that closes again (about 8 s locally; longer on the real sites). Queries go
+  from most specific (ISBN, then title + author + "first edition"/"signed") to broader.
+- **Like for like:** lots, parts/faulty, wrong size or format, and comps with a major feature yours lacks
+  (signed, limited…) are dropped. Comps lacking one of yours ("not first edition") count as *ordinary
+  copies*: shown as a floor, never used for the price.
+- **The price:** per marketplace, from recency-weighted quartiles of sold prices with outliers trimmed,
+  nudged by condition and rounded; from current asking prices (aimed low, and labelled) only when nothing
+  sold. A collectable item without matching comps gets no number, just "ordinary copies go for about £X;
+  yours is likely worth more". **Use £X** sets the price.
+- **Show comparables** lists every comp with its verdict and reason, linked to the listing. The latest
+  check is re-assessed when you edit the item, so fixing the edition re-prices it without searching again.
+
+Code: `packages/shared/src/pricing.ts` (features, queries, verdicts, maths), `apps/extension/src/lib/comps.ts`
+(results parsers), `apps/web/src/components/Pricing.tsx`. The parsers are tested against approximations
+of the results pages, not live ones yet.
 
 ### Relist & bump
 

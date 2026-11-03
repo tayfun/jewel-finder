@@ -481,3 +481,24 @@ label.checkbox input { width: 1rem; }
 .relist-table input[type=checkbox] { width: 1rem; height: 1rem; margin: 0; }
 .table-wrap { overflow-x: auto; }
 label.checkbox-row { flex-direction: row; align-items: center; gap: 0.45rem; margin: 0; font-weight: 550; }
+
+/* ==========================================================================
+   Pricing
+   ========================================================================== */
+.pricing .features { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 0.6rem; }
+.pricing .features .badge { text-transform: none; }
+.badge.feature-major { background: var(--accent); border-color: var(--accent); color: #fff; }
+.suggestions { list-style: none; padding: 0; margin: 0 0 0.6rem; display: grid; gap: 0.7rem; }
+.suggestions li { display: grid; gap: 0.25rem; justify-items: start; padding-bottom: 0.7rem; border-bottom: 1px solid var(--border); }
+.suggestion-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
+.price-sm { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.badge.conf-high { color: var(--accent); }
+.badge.conf-low { color: var(--warn); }
+.comps { list-style: none; padding: 0; margin: 0.4rem 0 0.8rem; display: grid; gap: 0.45rem; max-height: 26rem; overflow-y: auto; }
+.comp { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 0.6rem; align-items: center; }
+.comp img, .comp .noimg { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; background: var(--surface-2); }
+.comp-body a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.comp-side { display: grid; justify-items: end; text-align: right; max-width: 11rem; }
+.comp-side .small { color: var(--muted); }
+.comp.v-match .comp-side .small { color: var(--accent); }
+.comp.v-dropped { opacity: 0.55; }

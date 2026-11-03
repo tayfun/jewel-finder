@@ -29,6 +29,14 @@ export type WebToExtension =
     }
   | {
       source: typeof BRIDGE_WEB;
+      /** Search for comparables and save a price check. Answered with LIST_RESULT once it's saved. */
+      type: "PRICE_CHECK";
+      requestId: string;
+      itemId: string;
+      token: string;
+    }
+  | {
+      source: typeof BRIDGE_WEB;
       /** Re-create a live listing from the inventory, then end the old one (bump). Answered with LIST_RESULT. */
       type: "RELIST_ITEM";
       requestId: string;

@@ -87,6 +87,8 @@ POST   /api/items/import       {marketplace, listings[≤50]} → {results: [{ex
 GET    /api/listings?marketplace=                          → {listings}  (what's already imported)
 POST   /api/items/:id/merge    {otherId}                   → item   (409: both live on one marketplace)
 GET    /api/duplicates?itemId=                             → {pairs: [{a, b, score, reasons}]}
+POST   /api/items/:id/price-check {queries, comps, problems} → check (summary worked out here)
+GET    /api/items/:id/price-check                          → latest check, re-assessed against the item
 POST   /api/duplicates/dismiss {a, b}                      → 204    ("not duplicates", remembered)
 PUT    /api/items/:id/listings/:marketplace  ListingInput  → listing (upsert)
 DELETE /api/items/:id/listings/:marketplace                → 204
@@ -161,7 +163,7 @@ Selectors live in one adapter file per marketplace with multiple fallback strate
 ## 5. Implementation steps
 
 Status (2026-11-03): steps 1–5 are implemented and deployed, along with AI auto-fill, Sentry, package
-sizes, the extension install page and the privacy policy. Cross-delisting, imports, duplicate detection and relisting are built but not deployed. Tests: shared 24, API 24 (in workerd), extension 34
+sizes, the extension install page and the privacy policy. Cross-delisting, imports, duplicate detection and relisting are built but not deployed. Tests: shared 37, API 25 (in workerd), extension 38
 (happy-dom, incl. a real React-controlled form). The web app was exercised end to end in a browser.
 Live marketplace checks so far: one eBay listing was tried with the production extension; the
 description fix was built from the real eBay form. Still unverified live: eBay's package size picker (only its summary button was
@@ -200,7 +202,7 @@ the Worker, uploads source maps to Sentry (when configured) and runs `wrangler d
 
 (Imports and relist & bump are built: see section 4, steps 7 and 9.)
 
-**Pricing from comparables.** Suggest a price from what the same or similar items sold for (eBay sold
+**Pricing from comparables** (steps 1–4 of PRICING.md built: shared core, extension, API, web). Suggest a price from what the same or similar items sold for (eBay sold
 searches), or failing that are listed at (eBay, Vinted), with collectable features (first edition,
 signed, rare…) flagged and matched like for like. Full plan: [PRICING.md](PRICING.md).
 

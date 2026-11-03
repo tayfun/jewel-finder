@@ -2,7 +2,7 @@
 // Pure functions shared by the extension (queries), the Worker (summaries) and the web app (flags).
 // See PRICING.md for the reasoning.
 import { sizesAgree, titleSimilarity, titleTokens } from "./duplicates";
-import type { Item, Marketplace } from "./schemas";
+import type { Item, Marketplace, Settings } from "./schemas";
 
 // ------------------------------------------------------------------ types
 
@@ -306,9 +306,9 @@ export function withoutOutliers<T extends { price: number }>(comps: T[]): T[] {
   return comps.filter((c) => c.price >= q1 - fence && c.price <= q3 + fence);
 }
 
-/** Rounds to a price people expect: 50p steps under £20, £1 under £100, £5 above. */
+/** Rounds to a price people expect: 50p under £20, £1 under £100, £5 under £1,000, £50 under £10,000, then £100. */
 export function nicePrice(minor: number): number {
-  const step = minor < 2000 ? 50 : minor < 10_000 ? 100 : 500;
+  const step = minor < 2000 ? 50 : minor < 10_000 ? 100 : minor < 100_000 ? 500 : minor < 1_000_000 ? 5000 : 10_000;
   return Math.max(step, Math.round(minor / step) * step);
 }
 
@@ -393,4 +393,29 @@ export function priceSummary(item: PricedItem, comps: Comp[], now = Date.now()):
   if (best?.basis === "listed") warnings.push("Nothing sold to go on, so this is from current asking prices, aimed at the cheaper end.");
   if (!comps.length) warnings.push("No comparable listings found. Try a shorter title, or check by hand.");
   return { suggestions, features, ordinaryFloor, warnings, assessments };
+}
+
+// --------------------------------------------------------------- searching
+
+/** Which marketplace a comp source searches. */
+export const COMP_SOURCE_MARKETPLACE: Record<CompSource, Marketplace> = { ebay_sold: "ebay", ebay_listed: "ebay", vinted_listed: "vinted" };
+
+/** Public search page for comps. eBay listed: Buy It Now only, since auction bids aren't prices yet. */
+export function compSearchUrl(source: CompSource, query: string, settings: Settings): string {
+  const q = encodeURIComponent(query);
+  if (source === "vinted_listed") return `https://${settings.vintedDomain}/catalog?search_text=${q}&order=relevance`;
+  const sold = source === "ebay_sold" ? "&LH_Sold=1&LH_Complete=1" : "&LH_BIN=1";
+  return `https://${settings.ebayDomain}/sch/i.html?_nkw=${q}${sold}&_ipg=60&rt=nc`;
+}
+
+/** A price check: the comps the extension found, and the summary the server worked out from them. */
+export interface PriceCheck {
+  id: string;
+  itemId: string;
+  createdAt: number;
+  queries: string[];
+  comps: Comp[];
+  /** Searches that couldn't be read (blocked, changed markup…). */
+  problems: string[];
+  summary: PriceSummary;
 }

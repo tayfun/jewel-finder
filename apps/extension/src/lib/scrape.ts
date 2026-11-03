@@ -200,14 +200,14 @@ export interface ListingCard {
 }
 
 /** Vinted's card titles and alt texts read "Hoodie, brand: Nike, condition: Good, size: M, £12.00…". */
-const withoutDetails = (s: string | null | undefined) =>
+export const withoutDetails = (s: string | null | undefined) =>
   (s ?? "").split(/,\s*(?:brand|condition|size|marque|état|taille|marke|zustand|größe|marca|stato|taglia)\b/i)[0]!.trim();
 
 // Symbol-first prices ("£12.00", "EUR 12,00") are tried before symbol-after ones ("12,00 €"),
 // so a nearby number such as an item id isn't mistaken for the amount.
 const PRICE_BEFORE = /(?:[£$€]|\b(?:EUR|GBP|USD|CHF|PLN)\s?)\s?\d[\d.,]*/;
 const PRICE_AFTER = /\d[\d.,]*\s?(?:€|zł|kr|Kč|Ft|lei|CHF)/;
-const priceIn = (s: string) => (s.match(PRICE_BEFORE) ?? s.match(PRICE_AFTER))?.[0] ?? "";
+export const priceIn = (s: string) => (s.match(PRICE_BEFORE) ?? s.match(PRICE_AFTER))?.[0] ?? "";
 
 /**
  * Finds listings on any page by their links: each distinct listing id becomes one card, whose

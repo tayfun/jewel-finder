@@ -1,5 +1,14 @@
 import {
+  COMP_SOURCE_LABELS,
+  COMP_SOURCE_MARKETPLACE,
   MARKETPLACE_LABELS,
+  assessComp,
+  compSearchUrl,
+  priceQueries,
+  type Comp,
+  type CompSource,
+  type PriceCheck,
+  type Settings,
   imageUrl,
   myListingsUrl,
   sellUrl,
@@ -96,6 +105,37 @@ async function copyPhoto(url: string): Promise<string> {
   const { key } = await api<{ key: string }>("/api/images", { body: new Blob([blob], { type }) });
   return key;
 }
+
+// ------------------------------------------------------------ price checks
+
+/** Comps tabs waiting for their results, by tab id. */
+const compWaiters = new Map<number, (r: { comps: Comp[]; problem?: string }) => void>();
+const COMPS_TIMEOUT_MS = 30_000;
+/** Enough usable comps from one source to stop searching it. */
+const ENOUGH = 8;
+
+/** Opens one search in a background tab, waits for its content script to read it, closes it. */
+async function searchComps(source: CompSource, query: string, settings: Settings, itemId: string) {
+  // Record the job before the page loads, so its content script finds it.
+  const tab = await chrome.tabs.create({ url: "about:blank", active: false });
+  const tabId = tab.id;
+  if (tabId == null) return { comps: [], problem: "Couldn't open a tab" };
+  try {
+    const result = new Promise<{ comps: Comp[]; problem?: string }>((resolve) => {
+      compWaiters.set(tabId, resolve);
+      setTimeout(() => resolve({ comps: [], problem: "The search page didn't load in time." }), COMPS_TIMEOUT_MS);
+    });
+    await setJob(tabId, { kind: "comps", source, itemId, marketplace: COMP_SOURCE_MARKETPLACE[source], startedAt: Date.now() });
+    await chrome.tabs.update(tabId, { url: compSearchUrl(source, query, settings) });
+    return await result;
+  } finally {
+    compWaiters.delete(tabId);
+    await setJob(tabId, null);
+    await chrome.tabs.remove(tabId).catch(() => {});
+  }
+}
+
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // --------------------------------------------------------------- handlers
 
@@ -194,6 +234,51 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
       target: { externalId: listing.externalId, url: listing.url },
     });
     return { tabId: tab.id };
+  },
+
+  // Comparables for pricing: eBay sold first, then eBay and Vinted listings (PRICING.md §7).
+  async START_PRICE_CHECK({ itemId, token }) {
+    if (token) await adoptToken(token);
+    const auth = await getAuth();
+    if (!auth) throw new Error("Sign in to the Jewel Finder extension first");
+    const item = await api<ItemWithListings>(`/api/items/${itemId}`);
+    const queries = priceQueries(item);
+    if (!queries.length) throw new Error("Give the item a title first");
+    const isbn = item.book?.isbn || null;
+    const comps: Comp[] = [];
+    const problems: string[] = [];
+    const used = new Set<string>();
+    let soldUsable = 0;
+    for (const source of ["ebay_sold", "ebay_listed", "vinted_listed"] as const) {
+      // Plenty of sales: current eBay asking prices add nothing.
+      if (source === "ebay_listed" && soldUsable >= ENOUGH) continue;
+      let usable = 0;
+      for (const query of queries) {
+        // An ISBN search on Vinted finds nothing: its sellers rarely type ISBNs.
+        if (source === "vinted_listed" && query === isbn) continue;
+        used.add(query);
+        const result = await searchComps(source, query, auth.account.settings, itemId);
+        const fresh = result.comps.filter((c) => !comps.some((x) => x.url === c.url)).map((c) => ({ ...c, exact: query === isbn }));
+        comps.push(...fresh);
+        usable += fresh.filter((c) => assessComp(item, c).verdict !== "dropped").length;
+        if (result.problem) {
+          problems.push(`${COMP_SOURCE_LABELS[source]}, “${query}”: ${result.problem}`);
+          break; // probably a bot check: don't keep knocking
+        }
+        if (usable >= ENOUGH) break;
+        await pause(1200);
+      }
+      if (source === "ebay_sold") soldUsable = usable;
+    }
+    const check = await api<PriceCheck>(`/api/items/${itemId}/price-check`, {
+      json: { queries: [...used], comps: comps.slice(0, 400), problems },
+    });
+    return { checkId: check.id };
+  },
+
+  async COMPS_FOUND({ comps, problem }, sender) {
+    compWaiters.get(tabOf(sender))?.({ comps, problem });
+    return null;
   },
 
   async GET_JOB(_req, sender) {

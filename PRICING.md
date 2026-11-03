@@ -140,14 +140,27 @@ Deterministic rules decide the number; Gemini helps with judgement where text ma
 1. **Shared core** — `specialFeatures`, comp feature extraction, relevance, `priceQueries`,
    `priceSummary` with unit tests. *(done: `packages/shared/src/pricing.ts`)*
 2. **Extension** — `comps` job, eBay search-results and Vinted catalog parsers (fixtures), background
-   orchestration, `PRICE_CHECK` bridge message.
-3. **API** — `price_checks` table, endpoints, tests.
-4. **Web** — feature flags on the item page, price-check panel, apply price; side panel button.
+   orchestration, `PRICE_CHECK` bridge message. *(done: `apps/extension/src/lib/comps.ts`, `START_PRICE_CHECK`)*
+3. **API** — `price_checks` table, endpoints, tests. *(done: migration v7; the latest check is re-assessed
+   against the item as it is now, so correcting the edition re-prices without searching again; last 5 kept)*
+4. **Web** — feature flags on the item page, price-check panel, apply price. *(done: `components/Pricing.tsx`;
+   still to do: side panel button)*
 5. **AI relevance + collectable notes** (§8).
 6. Later: bulk "price check everything without a price", repricing suggestions for stale listings
    (ties into relist), learning from the seller's own sales, specialist book sources.
 
-## 10. Risks
+## 10. Notes from building it
+
+- eBay results pack title and "Sold 12 Oct 2026" into adjacent elements, so their text runs together
+  ("…1937Sold 12 Oct 2026"); dates are read from the caption elements, with a spaced-text fallback.
+- Struck-through sold prices (best offer accepted for an unseen amount) and price ranges (variations)
+  are skipped rather than guessed. Results below eBay's "matching fewer words" divider are ignored.
+- Searches per check: up to 2 per source (stops early at 8 usable comps; eBay listed is skipped when sold
+  already has 8). A check took ~8 s against local fixtures; live pages will be slower.
+- Verified end to end in Chromium with the built extension against fixtures served on the real
+  hostnames (not live eBay/Vinted yet).
+
+## 11. Risks
 
 - **Marketplace markup changes** break the results parsers: several selectors per field, fixtures, and
   "couldn't read results" surfaced instead of silent zeros.

@@ -19,6 +19,7 @@ import { api } from "../api";
 import { useAccount } from "../auth";
 import { BOOK_FIELDS } from "../book";
 import { Autofill } from "../components/Autofill";
+import { Pricing } from "../components/Pricing";
 import { StatusBadge } from "../components/Badges";
 import { Lightbox } from "../components/Lightbox";
 import { delistViaExtension, listViaExtension, relistViaExtension, useExtension } from "../extension";
@@ -272,6 +273,8 @@ export function ItemDetail() {
               ))}
             </dl>
           </section>
+
+          <Pricing item={item} onPriced={setData} />
 
           {item.book && (
             <section className="card">

@@ -7,6 +7,9 @@ import {
   Settings,
   findDuplicatePairs,
   isStale,
+  priceSummary,
+  type Comp,
+  type PriceCheck,
   pairKey,
   type DuplicatePair,
   type Account,
@@ -81,6 +84,17 @@ const MIGRATIONS = [
   `ALTER TABLE listings ADD COLUMN listed_at INTEGER;
    ALTER TABLE listings ADD COLUMN relisted_count INTEGER NOT NULL DEFAULT 0;
    UPDATE listings SET listed_at = updated_at WHERE status = 'listed';`,
+  // v7: price checks: comparables found for an item and the price worked out from them.
+  `CREATE TABLE price_checks (
+     id TEXT PRIMARY KEY,
+     item_id TEXT NOT NULL,
+     created_at INTEGER NOT NULL,
+     queries TEXT NOT NULL,
+     comps TEXT NOT NULL,
+     problems TEXT NOT NULL,
+     summary TEXT NOT NULL
+   );
+   CREATE INDEX price_checks_item ON price_checks(item_id, created_at DESC);`,
 ];
 
 type Row = Record<string, SqlStorageValue>;
@@ -342,6 +356,7 @@ class AccountDOBase extends DurableObject<Env> {
       this.db().exec("DELETE FROM listings WHERE item_id = ?", id);
       this.db().exec("DELETE FROM items WHERE id = ?", id);
       this.db().exec("DELETE FROM not_duplicates WHERE a = ? OR b = ?", id, id);
+      this.db().exec("DELETE FROM price_checks WHERE item_id = ?", id);
     });
     return item.images;
   }
@@ -474,6 +489,62 @@ class AccountDOBase extends DurableObject<Env> {
     return { results, possibleDuplicates, skippedImages };
   }
 
+  // ----------------------------------------------------------- price checks
+
+  /** Saves what the extension found and works out the price from it (here, so there's one source of truth). */
+  async savePriceCheck(itemId: string, input: { queries: string[]; comps: Comp[]; problems: string[] }): Promise<PriceCheck | null> {
+    const item = await this.getItem(itemId);
+    if (!item) return null;
+    const check: PriceCheck = {
+      id: crypto.randomUUID(),
+      itemId,
+      createdAt: Date.now(),
+      queries: input.queries,
+      comps: input.comps,
+      problems: input.problems,
+      summary: priceSummary(item, input.comps),
+    };
+    const db = this.db();
+    db.exec(
+      "INSERT INTO price_checks (id, item_id, created_at, queries, comps, problems, summary) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      check.id,
+      itemId,
+      check.createdAt,
+      JSON.stringify(check.queries),
+      JSON.stringify(check.comps),
+      JSON.stringify(check.problems),
+      JSON.stringify(check.summary),
+    );
+    // Keep a short history per item (a price trail), not every check ever.
+    db.exec(
+      `DELETE FROM price_checks WHERE item_id = ? AND id NOT IN
+         (SELECT id FROM price_checks WHERE item_id = ? ORDER BY created_at DESC LIMIT 5)`,
+      itemId,
+      itemId,
+    );
+    return check;
+  }
+
+  /**
+   * The latest price check, re-assessed against the item as it is now: fixing the edition or
+   * condition changes the verdicts without searching again.
+   */
+  async latestPriceCheck(itemId: string): Promise<PriceCheck | null> {
+    const item = await this.getItem(itemId);
+    const r = this.db().exec("SELECT * FROM price_checks WHERE item_id = ? ORDER BY created_at DESC LIMIT 1", itemId).toArray()[0];
+    if (!item || !r) return null;
+    const comps = JSON.parse(r.comps as string) as Comp[];
+    return {
+      id: r.id as string,
+      itemId,
+      createdAt: r.created_at as number,
+      queries: JSON.parse(r.queries as string),
+      comps,
+      problems: JSON.parse(r.problems as string),
+      summary: priceSummary(item, comps, r.created_at as number),
+    };
+  }
+
   // ------------------------------------------------------------- duplicates
 
   /** Likely duplicate pairs, best first; only those involving `itemId` when given. */
@@ -556,6 +627,7 @@ class AccountDOBase extends DurableObject<Env> {
       db.exec("DELETE FROM listings WHERE item_id = ?", otherId);
       db.exec("DELETE FROM items WHERE id = ?", otherId);
       db.exec("DELETE FROM not_duplicates WHERE a = ? OR b = ?", otherId, otherId);
+      db.exec("DELETE FROM price_checks WHERE item_id = ?", otherId);
     });
     return { ok: true, item: (await this.getItem(targetId))!, removedImages: other.images.filter((k) => !images.includes(k)) };
   }

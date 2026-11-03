@@ -8,6 +8,7 @@ import {
   ListingInput,
   Marketplace,
   MergeRequest,
+  PriceCheckInput,
   SettingsPatch,
   imageUrl,
   type ApiError,
@@ -225,6 +226,19 @@ app.post("/api/items/:id/merge", async (c) => {
   if (!result.ok) throw new HTTPException(result.status, { message: result.error });
   if (result.removedImages.length) c.executionCtx.waitUntil(c.env.IMAGES.delete(result.removedImages));
   return c.json(result.item);
+});
+
+// ----------------------------------------------------------- price checks
+
+// Comparables the extension found for the item; the server works out the suggested price.
+app.post("/api/items/:id/price-check", async (c) => {
+  const input = parse(PriceCheckInput, await body(c));
+  return c.json((await c.var.account.savePriceCheck(c.req.param("id"), input)) ?? notFound(), 201);
+});
+
+app.get("/api/items/:id/price-check", async (c) => {
+  const check = await c.var.account.latestPriceCheck(c.req.param("id"));
+  return check ? c.json(check) : c.json({ error: "No price check yet" }, 404);
 });
 
 // ------------------------------------------------------------- duplicates

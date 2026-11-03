@@ -1,6 +1,7 @@
 import { MARKETPLACE_LABELS, type Marketplace } from "@jf/shared";
 import { send, type FillReport, type JobContext, type ScrapedListing } from "../messages";
 import { setCancelHandler, showBanner } from "./banner";
+import { runComps } from "./comps";
 import { dataUrlToFile } from "./dom";
 
 export interface Published {
@@ -62,6 +63,7 @@ export async function run(adapter: Adapter): Promise<void> {
     return; // signed out or API unreachable; nothing to do on this page
   }
   if (!ctx || ctx.job.marketplace !== adapter.marketplace) return;
+  if (ctx.job.kind === "comps") return ctx.job.source ? runComps(ctx.job.source) : undefined;
   if (ctx.job.kind === "delist" || ctx.job.kind === "cleanup") return runDelist(adapter, ctx);
   const job = ctx;
   const relist = ctx.job.kind === "relist";

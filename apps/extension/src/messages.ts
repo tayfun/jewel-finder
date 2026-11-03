@@ -1,11 +1,13 @@
-import type { Account, Condition, ImportState, ItemStatus, ItemWithListings, Marketplace, Settings } from "@jf/shared";
+import type { Account, Comp, CompSource, Condition, ImportState, ItemStatus, ItemWithListings, Marketplace, Settings } from "@jf/shared";
 
 export interface Job {
   /**
    * "list" fills in a new listing; "delist" ends a live one. "relist" fills in a new listing to replace
    * a live one (a bump), then becomes "cleanup", which ends the old one. Missing (older builds) = "list".
    */
-  kind?: "list" | "delist" | "relist" | "cleanup";
+  kind?: "list" | "delist" | "relist" | "cleanup" | "comps";
+  /** comps: which search this background tab shows. */
+  source?: CompSource;
   /** relist / cleanup: the listing being replaced. */
   target?: { externalId: string | null; url: string | null };
   itemId: string;
@@ -82,6 +84,10 @@ export type Request =
   | { type: "IMPORT_KNOWN"; marketplace: Marketplace }
   /** Download the photos, upload them and create the item. */
   | { type: "IMPORT_LISTING"; marketplace: Marketplace; listing: ScrapedListing }
+  /** Search for comparables and save a price check for the item. */
+  | { type: "START_PRICE_CHECK"; itemId: string; token?: string }
+  /** From a comps tab: what its search results page showed. */
+  | { type: "COMPS_FOUND"; comps: Comp[]; problem?: string }
   /** eBay serves descriptions from another origin, which the page itself can't read. */
   | { type: "FETCH_DESCRIPTION"; url: string };
 
@@ -106,6 +112,8 @@ export interface Responses {
   /** possibleDuplicate: the new item looks like one already in the inventory. */
   IMPORT_LISTING: { itemId: string; created: boolean; photos: number; possibleDuplicate: boolean };
   FETCH_DESCRIPTION: string;
+  START_PRICE_CHECK: { checkId: string };
+  COMPS_FOUND: null;
 }
 
 export type Reply<T> = { ok: true; data: T } | { ok: false; error: string };

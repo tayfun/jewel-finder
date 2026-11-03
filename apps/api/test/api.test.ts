@@ -1,4 +1,4 @@
-import type { AuthResponse, DuplicatePair, ImportResult, ItemWithListings, Listing, Stats } from "@jf/shared";
+import type { AuthResponse, DuplicatePair, ImportResult, ItemWithListings, Listing, PriceCheck, Stats } from "@jf/shared";
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
@@ -391,5 +391,46 @@ describe("relisting", () => {
     const me = await call<{ settings: Record<string, unknown> }>("/api/me/settings", { token, method: "PATCH", json: { vintedRelistDays: 7, ebayRelistDays: 90 } });
     expect(me.data.settings).toMatchObject({ vintedRelistDays: 7, ebayRelistDays: 90 });
     expect((await call("/api/me/settings", { token, method: "PATCH", json: { vintedRelistDays: 0 } })).status).toBe(400);
+  });
+});
+
+describe("price checks", () => {
+  it("works out a price from the comps, keeps it, and re-assesses when the item changes", async () => {
+    const { token } = await signUp();
+    const { data: item } = await call<ItemWithListings>("/api/items", { token, json: { title: "The Hobbit Tolkien 1951 hardback", condition: "good" } });
+    expect((await call(`/api/items/${item.id}/price-check`, { token })).status).toBe(404);
+
+    const day = 86_400_000;
+    const sold = (title: string, pounds: number, i: number) => ({
+      source: "ebay_sold", title, price: pounds * 100, url: `https://www.ebay.co.uk/itm/${100000000 + i}`, soldAt: Date.now() - i * day,
+    });
+    const comps = [
+      ...[80, 85, 90, 95, 100].map((p, i) => sold("The Hobbit Tolkien 1951 hardback Allen Unwin", p, i)),
+      ...[9000, 11000, 12000].map((p, i) => sold("The Hobbit Tolkien 1937 first edition hardback", p, 10 + i)),
+      sold("Job lot 20 Tolkien books", 50, 20),
+    ];
+    const saved = await call<PriceCheck>(`/api/items/${item.id}/price-check`, {
+      token,
+      json: { queries: ["hobbit 1951 tolkien"], comps, problems: ["Listed on Vinted, “hobbit”: Couldn't read the search results"] },
+    });
+    expect(saved.status).toBe(201);
+    expect(saved.data.summary.suggestions[0]).toMatchObject({ marketplace: "ebay", basis: "sold", count: 5 });
+    expect(saved.data.summary.suggestions[0]!.price).toBe(9000);
+    expect(saved.data.summary.assessments.map((a) => a.verdict)).toEqual([
+      "match", "match", "match", "match", "match", "dropped", "dropped", "dropped", "dropped",
+    ]);
+
+    // The seller finds it's a first edition: same comps, now priced from the first editions only.
+    await call(`/api/items/${item.id}`, { token, method: "PATCH", json: { book: { edition: "First edition", format: "hardback" } } });
+    const again = await call<PriceCheck>(`/api/items/${item.id}/price-check`, { token });
+    expect(again.data.id).toBe(saved.data.id);
+    expect(again.data.problems).toHaveLength(1);
+    expect(again.data.summary.features.map((f) => f.key)).toEqual(["first_edition", "hardback"]);
+    expect(again.data.summary.suggestions[0]!.count).toBe(3);
+    expect(again.data.summary.suggestions[0]!.price).toBeGreaterThan(1_000_000);
+
+    const bad = await call(`/api/items/${item.id}/price-check`, { token, json: { queries: [], comps: [{ source: "etsy", title: "x", price: 1, url: "https://x.test" }] } });
+    expect(bad.status).toBe(400);
+    expect((await call(`/api/items/nope/price-check`, { token, json: { queries: [], comps: [] } })).status).toBe(404);
   });
 });

@@ -64,6 +64,11 @@ export function Privacy() {
             of your new listing, which it saves to the item in your inventory.
           </li>
           <li>
+            When you check an item's price, it opens eBay and Vinted search pages for that item in background tabs,
+            reads the prices of similar listings shown there, and saves them with the item so you can see how the
+            suggested price was worked out. The tabs close again once read.
+          </li>
+          <li>
             When you relist an item, it does both: it fills in a new listing for you to publish, then opens the old one
             so you can delete or end it.
           </li>
