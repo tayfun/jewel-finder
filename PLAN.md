@@ -91,6 +91,8 @@ POST   /api/items/:id/price-check {queries, comps, problems} → check (summary 
 GET    /api/items/:id/price-check                          → latest check, re-assessed against the item
 POST   /api/items/:id/price-check/review                   → latest check with a fresh AI review (502 if it fails)
 POST   /api/duplicates/dismiss {a, b}                      → 204    ("not duplicates", remembered)
+GET    /api/duplicates/dismissed                           → {pairs: [{a, b, dismissedAt}]}
+POST   /api/duplicates/undismiss {a, b}                    → 204    (suggested again)
 PUT    /api/items/:id/listings/:marketplace  ListingInput  → listing (upsert)
 DELETE /api/items/:id/listings/:marketplace                → 204
 GET    /api/stats                                          → counts + stock value

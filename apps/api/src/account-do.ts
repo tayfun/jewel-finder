@@ -578,6 +578,25 @@ class AccountDOBase extends DurableObject<Env> {
     this.db().exec("INSERT OR IGNORE INTO not_duplicates (a, b, created_at) VALUES (?, ?, ?)", x, y, Date.now());
   }
 
+  /** Pairs marked "not duplicates" whose items both still exist, most recent first. */
+  async dismissedDuplicates(): Promise<{ a: ItemWithListings; b: ItemWithListings; dismissedAt: number }[]> {
+    const rows = this.db()
+      .exec<{ a: string; b: string; created_at: number }>("SELECT a, b, created_at FROM not_duplicates ORDER BY created_at DESC LIMIT 200")
+      .toArray();
+    const out: { a: ItemWithListings; b: ItemWithListings; dismissedAt: number }[] = [];
+    for (const r of rows) {
+      const [a, b] = await Promise.all([this.getItem(r.a), this.getItem(r.b)]);
+      if (a && b) out.push({ a, b, dismissedAt: r.created_at });
+    }
+    return out;
+  }
+
+  /** Undoes "not duplicates": the pair is suggested again if it still looks like one. */
+  async undismissDuplicate(a: string, b: string): Promise<void> {
+    const [x, y] = a < b ? [a, b] : [b, a];
+    this.db().exec("DELETE FROM not_duplicates WHERE a = ? AND b = ?", x, y);
+  }
+
   /**
    * Folds `otherId` into `targetId` and deletes it. The target keeps its own details and fills
    * blanks from the other; tags are combined; listings move across. If either had sold, the

@@ -1,4 +1,4 @@
-import type { Account, AdminOverview, AuthResponse, DuplicatePair, ImportResult, ItemWithListings, Listing, PriceCheck, Stats } from "@jf/shared";
+import type { Account, AdminOverview, AuthResponse, DismissedPair, DuplicatePair, ImportResult, ItemWithListings, Listing, PriceCheck, Stats } from "@jf/shared";
 import { exports } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -319,6 +319,49 @@ describe("duplicates", () => {
     const merged = await call<ItemWithListings>(`/api/items/${a.id}/merge`, { token, json: { otherId: b.id } });
     expect(merged.data).toMatchObject({ status: "sold", quantity: 0 });
     expect(Object.fromEntries(merged.data.listings.map((l) => [l.marketplace, l.status]))).toEqual({ ebay: "ending", vinted: "sold" });
+  });
+
+  it("merges an item stuck pending on a site with the one that's live there, either way round", async () => {
+    // e.g. listed from the app but never recorded (pending), then imported from eBay as a second item.
+    for (const keepPending of [true, false]) {
+      const { token } = await signUp();
+      const make = async () => (await call<ItemWithListings>("/api/items", { token, json: { title: "Levi's 501 jeans", brand: "Levi's", price: 2500 } })).data;
+      const a = await make();
+      const b = await make();
+      await call(`/api/items/${a.id}/listings/vinted`, { token, method: "PUT", json: { status: "listed", externalId: "1" } });
+      await call(`/api/items/${a.id}/listings/ebay`, { token, method: "PUT", json: { status: "pending" } });
+      await call(`/api/items/${b.id}/listings/ebay`, { token, method: "PUT", json: { status: "listed", externalId: "999" } });
+      const [keep, drop] = keepPending ? [a, b] : [b, a];
+      const merged = await call<ItemWithListings>(`/api/items/${keep.id}/merge`, { token, json: { otherId: drop.id } });
+      expect(merged.status).toBe(200);
+      expect(merged.data.listings.map((l) => [l.marketplace, l.status, l.externalId])).toEqual([
+        ["ebay", "listed", "999"],
+        ["vinted", "listed", "1"],
+      ]);
+      expect((await call<{ items: ItemWithListings[] }>("/api/items", { token })).data.items.map((i) => i.id)).toEqual([keep.id]);
+    }
+  });
+
+  it("lists pairs marked 'not duplicates' and can undo that", async () => {
+    const { token } = await signUp();
+    const make = async () => (await call<ItemWithListings>("/api/items", { token, json: { title: "Levi's 501 jeans", brand: "Levi's", price: 2500 } })).data;
+    const a = await make();
+    const b = await make();
+    expect((await call<{ pairs: DuplicatePair[] }>("/api/duplicates", { token })).data.pairs).toHaveLength(1);
+
+    await call("/api/duplicates/dismiss", { token, json: { a: b.id, b: a.id } });
+    expect((await call<{ pairs: DuplicatePair[] }>("/api/duplicates", { token })).data.pairs).toHaveLength(0);
+    const dismissed = await call<{ pairs: DismissedPair[] }>("/api/duplicates/dismissed", { token });
+    expect(dismissed.data.pairs.map((p) => [p.a.id, p.b.id].sort())).toEqual([[a.id, b.id].sort()]);
+
+    expect((await call("/api/duplicates/undismiss", { token, json: { a: a.id, b: b.id } })).status).toBe(204);
+    expect((await call<{ pairs: DismissedPair[] }>("/api/duplicates/dismissed", { token })).data.pairs).toHaveLength(0);
+    expect((await call<{ pairs: DuplicatePair[] }>("/api/duplicates", { token })).data.pairs).toHaveLength(1);
+
+    // A dismissed pair whose item was deleted isn't listed.
+    await call("/api/duplicates/dismiss", { token, json: { a: a.id, b: b.id } });
+    await call(`/api/items/${b.id}`, { token, method: "DELETE" });
+    expect((await call<{ pairs: DismissedPair[] }>("/api/duplicates/dismissed", { token })).data.pairs).toHaveLength(0);
   });
 
   it("refuses to merge two live listings on one site, and remembers 'not duplicates'", async () => {

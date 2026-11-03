@@ -463,6 +463,10 @@ label.checkbox input { width: 1rem; }
 .dup-body { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
 .dup-body .item-title { color: var(--text); }
 .dup-body button { align-self: flex-start; margin-top: 0.3rem; }
+.dup-dismissed summary { cursor: pointer; font-weight: 650; }
+.dup-dismissed ul { list-style: none; margin: 0; padding: 0; }
+.dup-dismissed li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; padding: 0.55rem 0; border-top: 1px solid var(--border); }
+.dup-dismissed-titles { flex: 1; min-width: 12rem; }
 @media (max-width: 700px) {
   .dup-items { grid-template-columns: 1fr; }
 }

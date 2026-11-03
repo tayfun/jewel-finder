@@ -19,6 +19,13 @@ export interface DuplicatePair extends DuplicateMatch {
   b: ItemWithListings;
 }
 
+/** A pair the seller marked "not duplicates" (both items still exist). */
+export interface DismissedPair {
+  a: ItemWithListings;
+  b: ItemWithListings;
+  dismissedAt: number;
+}
+
 // Words that say nothing about which item it is: grammar, and marketplace title filler.
 const STOP = new Set(
   (

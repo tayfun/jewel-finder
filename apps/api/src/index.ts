@@ -20,6 +20,7 @@ import {
   compsForReview,
   type AiReview,
   type Comp,
+  type DismissedPair,
   type DuplicatePair,
   type ImportResult,
   type ItemWithListings,
@@ -379,6 +380,16 @@ app.get("/api/duplicates", async (c) => {
 app.post("/api/duplicates/dismiss", async (c) => {
   const { a, b } = parse(DismissDuplicateRequest, await body(c));
   await c.var.account.dismissDuplicate(a, b);
+  return c.body(null, 204);
+});
+
+app.get("/api/duplicates/dismissed", async (c) => {
+  return c.json<{ pairs: DismissedPair[] }>({ pairs: await c.var.account.dismissedDuplicates() });
+});
+
+app.post("/api/duplicates/undismiss", async (c) => {
+  const { a, b } = parse(DismissDuplicateRequest, await body(c));
+  await c.var.account.undismissDuplicate(a, b);
   return c.body(null, 204);
 });
 

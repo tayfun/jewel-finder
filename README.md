@@ -147,13 +147,14 @@ Flags items that look like the same thing entered twice, typically one imported 
 from eBay. They're counted on the Inventory page, noted on each item's page and in the import panel's
 summary, and reviewed side by side at `/duplicates`.
 
-- **Keep this one** merges the pair. The kept item keeps its own details and photos (it takes the
+- **Merge into this one** merges the pair into the item you pick. The kept item keeps its own details and photos (it takes the
   other's photos only if it has none), fills its blank fields from the other, combines tags and takes
   over the other's listings; the other item is deleted. If either had sold, the merged item is sold and
   its other live listings become "Needs ending". A merge is refused when both items have a live listing
   on the same marketplace.
-- **Not duplicates** is remembered, so the pair isn't suggested again. Copies made with "Duplicate"
-  (restocking) are never flagged.
+- **Not duplicates** is remembered, so the pair isn't suggested again. It can be undone straight away,
+  or later from "Marked as not duplicates" at the bottom of the page, which brings the pair back so it
+  can be merged. Copies made with "Duplicate" (restocking) are never flagged.
 
 Scoring is in `packages/shared/src/duplicates.ts`. Title similarity is the base: mostly how many of the
 shorter title's words the longer one contains, since eBay titles add keywords. A shared ISBN counts as a
