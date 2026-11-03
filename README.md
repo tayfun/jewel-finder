@@ -231,4 +231,4 @@ To publish it:
 5. Once approved, set `VITE_EXTENSION_URL` in `apps/web/.env` to the listing URL and redeploy: the
    "Install" links then go to the store.
 
-For updates, bump `version` in `apps/extension/package.json` (every extension change gets a bump, see CLAUDE.md), run `pnpm release:ext` and upload the new zip.
+For updates, bump `version` in `apps/extension/package.json` (every extension change gets a bump, see AGENTS.md), run `pnpm release:ext` and upload the new zip.
