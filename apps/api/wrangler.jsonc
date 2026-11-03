@@ -21,6 +21,11 @@
 			{
 				"name": "ACCOUNT",
 				"class_name": "AccountDO"
+			},
+			{
+				// Single instance: every account's counts + admin flags, for the admin dashboard.
+				"name": "DIRECTORY",
+				"class_name": "DirectoryDO"
 			}
 		]
 	},
@@ -29,6 +34,12 @@
 			"tag": "v1",
 			"new_sqlite_classes": [
 				"AccountDO"
+			]
+		},
+		{
+			"tag": "v2",
+			"new_sqlite_classes": [
+				"DirectoryDO"
 			]
 		}
 	],
@@ -42,6 +53,8 @@
 	"version_metadata": {
 		"binding": "CF_VERSION_METADATA"
 	},
+	// Secrets: JWT_SECRET, GEMINI_API_KEY, SENTRY_DSN, and ADMIN_EMAILS (comma-separated emails that are
+	// always admins; they can make others admin from /admin).
 	// Model used for "Auto-fill from photos", and the one tried when it is overloaded.
 	// The API key is the GEMINI_API_KEY secret.
 	"vars": {

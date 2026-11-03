@@ -9,8 +9,11 @@ import {
   Marketplace,
   MergeRequest,
   PriceCheckInput,
+  SetAdminRequest,
   SettingsPatch,
   imageUrl,
+  type Account,
+  type AdminOverview,
   type ApiError,
   type AuthResponse,
   type AutofillSuggestion,
@@ -31,8 +34,10 @@ import { hashPassword, issueToken, readToken, verifyPassword } from "./auth";
 import { sentryOptions } from "./sentry";
 
 export { AccountDO } from "./account-do";
+export { DirectoryDO } from "./directory-do";
 
-type AppEnv = { Bindings: Env; Variables: { userId: string; account: DurableObjectStub<import("./account-do").AccountDO> } };
+type AccountStub = DurableObjectStub<import("./account-do").AccountDO>;
+type AppEnv = { Bindings: Env; Variables: { userId: string; email: string; account: AccountStub } };
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const IMAGE_TYPES: Record<string, string> = {
@@ -69,6 +74,35 @@ function notFound(what = "Item"): never {
 function assertOwnImages(userId: string, keys: string[] | undefined) {
   if (keys?.some((k) => !k.startsWith(`u/${userId}/`))) {
     throw new HTTPException(400, { message: "Unknown image" });
+  }
+}
+
+// ------------------------------------------------------- user directory
+
+const directory = (env: Env) => env.DIRECTORY.getByName("directory");
+
+/** Emails in the ADMIN_EMAILS secret: always admins. */
+function ownerEmails(env: Env): string[] {
+  return (env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+async function isAdmin(env: Env, userId: string, email: string): Promise<boolean> {
+  return ownerEmails(env).includes(email) || (await directory(env).isAdmin(userId));
+}
+
+/**
+ * Copies the account's counts to the directory. Runs after the response (waitUntil) and never
+ * fails the request: a missed report only makes the admin dashboard slightly behind.
+ */
+async function reportToDirectory(env: Env, account: AccountStub): Promise<void> {
+  try {
+    const summary = await account.summary();
+    if (summary) await directory(env).report(summary);
+  } catch (e) {
+    Sentry.captureException(e);
   }
 }
 
@@ -112,17 +146,22 @@ app.post("/api/auth/register", async (c) => {
   const result = await stub.register(email, await hashPassword(password));
   if (!result.ok) throw new HTTPException(409, { message: "An account with that email already exists" });
   const token = await issueToken({ sub: result.account.id, email }, c.env.JWT_SECRET);
-  return c.json<AuthResponse>({ token, account: result.account }, 201);
+  c.executionCtx.waitUntil(reportToDirectory(c.env, stub));
+  const admin = await isAdmin(c.env, result.account.id, email);
+  return c.json<AuthResponse>({ token, account: { ...result.account, isAdmin: admin } }, 201);
 });
 
 app.post("/api/auth/login", async (c) => {
   const { email, password } = parse(Credentials, await body(c));
-  const creds = await c.env.ACCOUNT.getByName(email).getCredentials();
+  const stub = c.env.ACCOUNT.getByName(email);
+  const creds = await stub.getCredentials();
   if (!creds || !(await verifyPassword(password, creds.passwordHash))) {
     throw new HTTPException(401, { message: "Wrong email or password" });
   }
+  c.executionCtx.waitUntil(reportToDirectory(c.env, stub));
   const token = await issueToken({ sub: creds.account.id, email }, c.env.JWT_SECRET);
-  return c.json<AuthResponse>({ token, account: creds.account });
+  const admin = await isAdmin(c.env, creds.account.id, email);
+  return c.json<AuthResponse>({ token, account: { ...creds.account, isAdmin: admin } });
 });
 
 // Everything below needs a bearer token.
@@ -137,23 +176,72 @@ app.use("/api/*", async (c, next) => {
     throw new HTTPException(401, { message: "Not signed in" });
   }
   c.set("userId", claims.sub);
+  c.set("email", claims.email);
   Sentry.setUser({ id: claims.sub });
   c.set("account", c.env.ACCOUNT.get(id));
   await next();
+  // Keep the admin dashboard's counts current: after any change, and on /api/me (each app or
+  // side panel load) so it knows who's active and picks up accounts from before the directory.
+  if (c.res.status < 400 && (c.req.method !== "GET" || c.req.path === "/api/me")) {
+    c.executionCtx.waitUntil(reportToDirectory(c.env, c.var.account));
+  }
 });
 
 app.get("/api/me", async (c) => {
-  const account = await c.var.account.getAccount();
+  const [account, admin] = await Promise.all([c.var.account.getAccount(), isAdmin(c.env, c.var.userId, c.var.email)]);
   if (!account) throw new HTTPException(401, { message: "Account no longer exists" });
-  return c.json(account);
+  return c.json<Account>({ ...account, isAdmin: admin });
 });
 
 app.patch("/api/me/settings", async (c) => {
   const patch = parse(SettingsPatch, await body(c));
-  return c.json((await c.var.account.updateSettings(patch)) ?? notFound("Account"));
+  const account = (await c.var.account.updateSettings(patch)) ?? notFound("Account");
+  return c.json<Account>({ ...account, isAdmin: await isAdmin(c.env, c.var.userId, c.var.email) });
 });
 
 app.get("/api/stats", async (c) => c.json(await c.var.account.stats()));
+
+// ------------------------------------------------------------------ admin
+
+app.use("/api/admin/*", async (c, next) => {
+  if (!(await isAdmin(c.env, c.var.userId, c.var.email))) throw new HTTPException(403, { message: "Admins only" });
+  await next();
+});
+
+app.get("/api/admin/overview", async (c) => c.json<AdminOverview>(await directory(c.env).overview(ownerEmails(c.env))));
+
+app.put("/api/admin/users/:id/admin", async (c) => {
+  const { isAdmin: makeAdmin } = parse(SetAdminRequest, await body(c));
+  const id = c.req.param("id");
+  if (id === c.var.userId && !makeAdmin) {
+    throw new HTTPException(400, { message: "You can't remove your own admin access; ask another admin" });
+  }
+  if (!(await directory(c.env).setAdmin(id, makeAdmin))) notFound("User");
+  return c.body(null, 204);
+});
+
+// Adds accounts to the directory by Durable Object id (scripts/backfill-directory.mjs lists them from
+// the Cloudflare API). For accounts from before the directory existed that haven't signed in since.
+app.post("/api/admin/sync", async (c) => {
+  const { ids } = parse(z.object({ ids: z.array(z.string().max(100)).max(100) }), await body(c));
+  let synced = 0;
+  const missing: string[] = [];
+  for (const raw of ids) {
+    let summary = null;
+    try {
+      summary = await c.env.ACCOUNT.get(c.env.ACCOUNT.idFromString(raw)).summary();
+    } catch {
+      // Not a valid id for this namespace.
+    }
+    if (!summary) {
+      missing.push(raw);
+      continue;
+    }
+    await directory(c.env).report(summary, false);
+    synced++;
+  }
+  return c.json({ synced, missing });
+});
 
 // ------------------------------------------------------------------ items
 

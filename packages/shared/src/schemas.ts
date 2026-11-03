@@ -175,6 +175,8 @@ export interface Account {
   email: string;
   settings: Settings;
   createdAt: number;
+  /** Only on /api/me: whether this account can open the admin dashboard. */
+  isAdmin?: boolean;
 }
 
 export const Credentials = z.object({
@@ -202,6 +204,41 @@ export interface Stats {
   /** Live listings older than the seller's relist interval. */
   stale: number;
 }
+
+/** What an account reports to the platform-wide user directory (admin dashboard). */
+export interface AccountSummary {
+  id: string;
+  email: string;
+  createdAt: number;
+  byStatus: Record<ItemStatus, number>;
+  /** Live listings per marketplace. */
+  listed: Record<Marketplace, number>;
+}
+
+export interface AdminUser extends AccountSummary {
+  lastSeenAt: number;
+  /** Made admin from the dashboard. */
+  isAdmin: boolean;
+  /** Listed in the ADMIN_EMAILS secret: always an admin, can't be changed from the dashboard. */
+  isOwner: boolean;
+}
+
+export interface AdminOverview {
+  totals: {
+    users: number;
+    admins: number;
+    signups7d: number;
+    signups30d: number;
+    active7d: number;
+    active30d: number;
+    items: number;
+    byStatus: Record<ItemStatus, number>;
+    listed: Record<Marketplace, number>;
+  };
+  users: AdminUser[];
+}
+
+export const SetAdminRequest = z.object({ isAdmin: z.boolean() });
 
 export interface ApiError {
   error: string;

@@ -4,6 +4,8 @@ GEMINI_API_KEY=
 # Sentry project DSN for the API (leave empty to disable error reporting locally).
 SENTRY_DSN=
 SENTRY_ENVIRONMENT=development
+# Comma-separated emails that are always admins and can open /admin (and make others admin there).
+ADMIN_EMAILS=
 # Throwaway local account used when trying the app in dev (not read by the Worker):
 # DEMO_EMAIL=demo@example.com
 # DEMO_PASSWORD=demo-pass-1234

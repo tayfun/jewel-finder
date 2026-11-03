@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
-      miniflare: { bindings: { JWT_SECRET: "test-secret", GEMINI_API_KEY: "test-gemini-key" } },
+      miniflare: { bindings: { JWT_SECRET: "test-secret", GEMINI_API_KEY: "test-gemini-key", ADMIN_EMAILS: " Boss@example.com, other@example.com" } },
     }),
   ],
 });

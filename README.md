@@ -177,6 +177,22 @@ You review and tick what to apply. Put a key from https://aistudio.google.com/ap
 `apps/api/.dev.vars` as `GEMINI_API_KEY=...` (the model is `GEMINI_MODEL` in `wrangler.jsonc`; when it is overloaded the Worker falls back to `GEMINI_FALLBACK_MODEL`).
 The prompt and response schema live in `apps/api/src/ai.ts`.
 
+## Admin dashboard
+
+`/admin` in the web app shows how many users and items there are (with sign-ups, activity, items by
+status and live listings), plus a table of every user with a **Make admin** button. It appears in
+the nav for admins only.
+
+- **Who's an admin:** the emails in the `ADMIN_EMAILS` secret (comma-separated:
+  `pnpm --filter @jf/api exec wrangler secret put ADMIN_EMAILS`) always are, shown as *Owner*. They
+  can make anyone else an admin from the dashboard. Nobody can remove their own admin access.
+- **Where the numbers come from:** each account lives in its own Durable Object, so the Cloudflare
+  dashboard can't count across them. A single `DirectoryDO` keeps a row per user, and each account
+  reports its counts there after any change and whenever the app or side panel opens.
+- **Accounts from before the directory** join it the next time they sign in or open the app. To add
+  them all at once, run `node scripts/backfill-directory.mjs` (see the top of the file for the env
+  vars it needs).
+
 ## Error monitoring (Sentry)
 
 The API (Worker + Durable Object) and the web app report errors and performance traces to Sentry.

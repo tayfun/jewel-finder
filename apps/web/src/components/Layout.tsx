@@ -29,6 +29,7 @@ export function Layout({ children }: { children?: ReactNode }) {
           <NavLink to="/import">Import</NavLink>
           <NavLink to="/relist">Relist</NavLink>
           <NavLink to="/settings">Settings</NavLink>
+          {account?.isAdmin && <NavLink to="/admin">Admin</NavLink>}
         </nav>
         <div className="topbar-end">
           <span className="muted small hide-sm">{account?.email}</span>

@@ -15,6 +15,7 @@ import {
   pairKey,
   type DuplicatePair,
   type Account,
+  type AccountSummary,
   type Item,
   type ItemData,
   type ItemPatch,
@@ -653,6 +654,24 @@ class AccountDOBase extends DurableObject<Env> {
       marketplace,
     );
     return cursor.rowsWritten > 0;
+  }
+
+  /** Counts for the platform-wide directory (admin dashboard). Null when there's no account here. */
+  async summary(): Promise<AccountSummary | null> {
+    const account = this.getAccount();
+    if (!account) return null;
+    const db = this.db();
+    const byStatus = Object.fromEntries(ITEM_STATUSES.map((s) => [s, 0])) as AccountSummary["byStatus"];
+    for (const r of db.exec<{ status: ItemStatus; n: number }>("SELECT status, COUNT(*) AS n FROM items GROUP BY status")) {
+      byStatus[r.status] = r.n;
+    }
+    const listed = Object.fromEntries(MARKETPLACES.map((m) => [m, 0])) as AccountSummary["listed"];
+    for (const r of db.exec<{ marketplace: Marketplace; n: number }>(
+      "SELECT marketplace, COUNT(*) AS n FROM listings WHERE status = 'listed' GROUP BY marketplace",
+    )) {
+      listed[r.marketplace] = r.n;
+    }
+    return { id: account.id, email: account.email, createdAt: account.createdAt, byStatus, listed };
   }
 
   async stats(): Promise<Stats> {

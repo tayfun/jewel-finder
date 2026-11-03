@@ -15,6 +15,7 @@ import { Import } from "./pages/Import";
 import { Relist } from "./pages/Relist";
 import { Privacy } from "./pages/Privacy";
 import { Settings } from "./pages/Settings";
+import { Admin } from "./pages/Admin";
 import "./styles.css";
 
 // Navigation spans are named after route patterns (/items/:id) instead of raw URLs.
@@ -39,6 +40,7 @@ const router = createRouter([
       { path: "/import", element: <Import /> },
       { path: "/duplicates", element: <Duplicates /> },
       { path: "/relist", element: <Relist /> },
+      { path: "/admin", element: <Admin /> },
     ],
   },
     ],

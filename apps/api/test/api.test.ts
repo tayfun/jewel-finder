@@ -1,4 +1,4 @@
-import type { AuthResponse, DuplicatePair, ImportResult, ItemWithListings, Listing, PriceCheck, Stats } from "@jf/shared";
+import type { Account, AdminOverview, AuthResponse, DuplicatePair, ImportResult, ItemWithListings, Listing, PriceCheck, Stats } from "@jf/shared";
 import { exports } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -442,5 +442,76 @@ describe("price checks", () => {
     const bad = await call(`/api/items/${item.id}/price-check`, { token, json: { queries: [], comps: [{ source: "etsy", title: "x", price: 1, url: "https://x.test" }] } });
     expect(bad.status).toBe(400);
     expect((await call(`/api/items/nope/price-check`, { token, json: { queries: [], comps: [] } })).status).toBe(404);
+  });
+});
+
+describe("admin", () => {
+  /** Signs up, or logs in when an earlier run in this file already made the account. */
+  async function signInAs(email: string) {
+    const creds = { email, password: "hunter2hunter2" };
+    const reg = await call<AuthResponse>("/api/auth/register", { json: creds });
+    if (reg.status === 201) return reg.data;
+    return (await call<AuthResponse>("/api/auth/login", { json: creds })).data;
+  }
+
+  it("shows platform totals to admins only, and lets admins make others admin", async () => {
+    const seller = await signUp();
+    await call("/api/items", { token: seller.token, json: { title: "Levi's 501 jeans", price: 2500 } });
+    await call("/api/items", { token: seller.token, json: { title: "Nike Air Max", status: "draft" } });
+
+    // Not in ADMIN_EMAILS, not made admin.
+    expect((await call<Account>("/api/me", { token: seller.token })).data.isAdmin).toBe(false);
+    expect((await call("/api/admin/overview", { token: seller.token })).status).toBe(403);
+
+    // In ADMIN_EMAILS (matched case-insensitively).
+    const boss = await signInAs("boss@example.com");
+    expect(boss.account.isAdmin).toBe(true);
+    expect(seller.account.isAdmin).toBe(false);
+    expect((await call<Account>("/api/me", { token: boss.token })).data.isAdmin).toBe(true);
+
+    // Counts reach the directory after the response; wait for them.
+    const overview = await vi.waitFor(async () => {
+      const res = await call<AdminOverview>("/api/admin/overview", { token: boss.token });
+      expect(res.status).toBe(200);
+      const row = res.data.users.find((u) => u.id === seller.account.id);
+      expect(row?.byStatus).toMatchObject({ in_stock: 1, draft: 1 });
+      expect(res.data.users.find((u) => u.email === "boss@example.com")?.isOwner).toBe(true);
+      return res.data;
+    });
+    expect(overview.totals.users).toBeGreaterThanOrEqual(2);
+    expect(overview.totals.items).toBeGreaterThanOrEqual(2);
+    expect(overview.totals.signups7d).toBeGreaterThanOrEqual(2);
+    expect(overview.users.find((u) => u.id === seller.account.id)).toMatchObject({ email: seller.email, isAdmin: false, isOwner: false });
+
+    // Promote the seller; they can now open the dashboard.
+    const promote = await call(`/api/admin/users/${seller.account.id}/admin`, { method: "PUT", token: boss.token, json: { isAdmin: true } });
+    expect(promote.status).toBe(204);
+    expect((await call<Account>("/api/me", { token: seller.token })).data.isAdmin).toBe(true);
+    expect((await call("/api/admin/overview", { token: seller.token })).status).toBe(200);
+
+    // Nobody can lock themselves out, unknown users 404, bad bodies 400.
+    const selfDemote = await call(`/api/admin/users/${seller.account.id}/admin`, { method: "PUT", token: seller.token, json: { isAdmin: false } });
+    expect(selfDemote.status).toBe(400);
+    expect((await call("/api/admin/users/nope/admin", { method: "PUT", token: boss.token, json: { isAdmin: true } })).status).toBe(404);
+    expect((await call(`/api/admin/users/${seller.account.id}/admin`, { method: "PUT", token: boss.token, json: {} })).status).toBe(400);
+
+    // Demote again.
+    await call(`/api/admin/users/${seller.account.id}/admin`, { method: "PUT", token: boss.token, json: { isAdmin: false } });
+    expect((await call("/api/admin/overview", { token: seller.token })).status).toBe(403);
+
+    // ADMIN_EMAILS admins stay admins whatever the flag says.
+    await call(`/api/admin/users/${boss.account.id}/admin`, { method: "PUT", token: seller.token, json: { isAdmin: false } });
+    expect((await call("/api/admin/overview", { token: boss.token })).status).toBe(200);
+  });
+
+  it("backfills accounts by Durable Object id", async () => {
+    const boss = await signInAs("boss@example.com");
+    const seller = await signUp();
+    const res = await call<{ synced: number; missing: string[] }>("/api/admin/sync", {
+      token: boss.token,
+      json: { ids: [seller.account.id, "not-an-id", "0".repeat(64)] },
+    });
+    expect(res.data).toEqual({ synced: 1, missing: ["not-an-id", "0".repeat(64)] });
+    expect((await call("/api/admin/sync", { token: seller.token, json: { ids: [] } })).status).toBe(403);
   });
 });
