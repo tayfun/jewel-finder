@@ -26,6 +26,7 @@ pnpm typecheck
 ```bash
 pnpm build:ext       # → apps/extension/dist       "Jewel Finder (dev)", talks to http://localhost:8787
 pnpm build:ext:prod  # → apps/extension/dist-prod  "Jewel Finder", talks to the deployed Worker
+pnpm release:ext     # → apps/extension/release/jewel-finder-<version>.zip (for the Chrome Web Store)
 ```
 
 Accounts live on one server, so sign in with the build that matches where you signed up. The side
