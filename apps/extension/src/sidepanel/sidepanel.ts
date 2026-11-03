@@ -9,6 +9,7 @@ import {
   type ItemStatus,
   type ItemWithListings,
   type Marketplace,
+  type PriceCheck,
 } from "@jf/shared";
 import { API_URL } from "../config";
 import { send } from "../messages";
@@ -35,6 +36,11 @@ let status: ItemStatus | "" = "in_stock";
 let error = "";
 let loading = false;
 let busy = "";
+/** The item whose prices are being checked: one at a time, since each check opens several tabs. */
+let pricing: string | null = null;
+/** Price checks run from this panel, by item id. */
+const checks = new Map<string, PriceCheck>();
+const priceErrors = new Map<string, string>();
 
 async function init() {
   try {
@@ -107,6 +113,91 @@ async function list(item: ItemWithListings, marketplace: Marketplace) {
     busy = "";
     render();
   }
+}
+
+/** Searches eBay and Vinted for comparables in background tabs, then shows the suggested price here. */
+async function checkPrice(item: ItemWithListings) {
+  pricing = item.id;
+  priceErrors.delete(item.id);
+  render();
+  try {
+    const { check } = await send({ type: "START_PRICE_CHECK", itemId: item.id });
+    checks.set(item.id, check);
+  } catch (e) {
+    priceErrors.set(item.id, (e as Error).message);
+  } finally {
+    pricing = null;
+    render();
+  }
+}
+
+async function usePrice(item: ItemWithListings, price: number) {
+  priceErrors.delete(item.id);
+  try {
+    const updated = await send({ type: "SET_PRICE", itemId: item.id, price });
+    items = items.map((i) => (i.id === updated.id ? updated : i));
+  } catch (e) {
+    priceErrors.set(item.id, (e as Error).message);
+  }
+  render();
+}
+
+/** The latest check's suggestions, with a button to use each, and a link to the full breakdown. */
+function renderPriceCheck(item: ItemWithListings) {
+  const error = priceErrors.get(item.id);
+  const check = checks.get(item.id);
+  if (pricing === item.id) {
+    return h("div", { class: "pricecheck muted" }, "Searching eBay and Vinted in background tabs… about a minute.");
+  }
+  if (!check && !error) return null;
+  const money = (v: number | null) => formatMoney(v, account?.settings.currency);
+  const s = check?.summary;
+  const ai = check?.ai;
+  return h(
+    "div",
+    { class: "pricecheck" },
+    error ? h("p", { class: "error" }, error) : null,
+    s && s.suggestions.length
+      ? h(
+          "ul",
+          {},
+          ...s.suggestions.map((sug) =>
+            h(
+              "li",
+              {},
+              h("strong", {}, money(sug.price)),
+              h("span", { class: "muted", title: sug.note }, ` ${MARKETPLACE_LABELS[sug.marketplace]} · ${money(sug.low)}–${money(sug.high)} · ${sug.confidence}`),
+              h(
+                "button",
+                { class: item.price === sug.price ? "" : "primary", disabled: item.price === sug.price, onClick: () => usePrice(item, sug.price) },
+                item.price === sug.price ? "Current" : "Use",
+              ),
+            ),
+          ),
+        )
+      : s
+        ? h(
+            "p",
+            { class: "muted" },
+            s.ordinaryFloor != null
+              ? `No like-for-like comparables. Ordinary copies go for about ${money(s.ordinaryFloor)}; yours is likely worth more.`
+              : "No price suggested: not enough like-for-like comparables.",
+          )
+        : null,
+    s?.warnings[0] && s.suggestions.length ? h("p", { class: "muted" }, s.warnings[0]) : null,
+    ai?.status === "done" && !check?.aiOutdated && ai.note ? h("p", { class: "ai-note" }, `✨ ${ai.note}`) : null,
+    check
+      ? h(
+          "p",
+          { class: "muted" },
+          `${check.comps.length} comparable${check.comps.length === 1 ? "" : "s"}`,
+          ai?.status === "done" && !check.aiOutdated && s?.aiChanged ? `, ${s.aiChanged} re-judged by AI` : "",
+          check.problems.length ? ` · ${check.problems.length} search${check.problems.length === 1 ? "" : "es"} couldn't be read` : "",
+          " · ",
+          h("a", { href: `${API_URL}/items/${item.id}`, target: "_blank" }, "Details ↗"),
+        )
+      : null,
+  );
 }
 
 function renderLogin() {
@@ -197,7 +288,19 @@ function renderItem(item: ItemWithListings) {
             busy === key ? "Opening…" : `${l?.status === "pending" ? "↻ " : "+ "}${MARKETPLACE_LABELS[m]}`,
           );
         }),
+        item.status === "sold"
+          ? null
+          : h(
+              "button",
+              {
+                disabled: !!pricing || !item.title,
+                title: "Search what similar items sold for on eBay and are listed at on eBay and Vinted",
+                onClick: () => checkPrice(item),
+              },
+              pricing === item.id ? "Checking…" : checks.has(item.id) ? "💷 Again" : "💷 Price",
+            ),
       ),
+      renderPriceCheck(item),
     ),
   );
 }

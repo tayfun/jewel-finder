@@ -66,7 +66,9 @@ export function Privacy() {
           <li>
             When you check an item's price, it opens eBay and Vinted search pages for that item in background tabs,
             reads the prices of similar listings shown there, and saves them with the item so you can see how the
-            suggested price was worked out. The tabs close again once read.
+            suggested price was worked out. The tabs close again once read. If AI is set up, the item's details,
+            up to two of its photos and the titles and prices of those listings are sent to Google's Gemini API to
+            judge which listings are really the same item (see below).
           </li>
           <li>
             When you relist an item, it does both: it fills in a new listing for you to publish, then opens the old one
@@ -91,16 +93,22 @@ export function Privacy() {
           , including the Limited Use requirements.
         </p>
 
-        <h2>Auto-fill from photos</h2>
+        <h2>AI: auto-fill and price checks</h2>
         <p>
           When you ask for an AI suggestion, we send that item's photos, and the title, description and notes you've
           written, to Google's Gemini API. Google processes them under the{" "}
           <a href="https://ai.google.dev/gemini-api/terms" target="_blank" rel="noreferrer">
             Gemini API terms
           </a>{" "}
-          to return the suggestion. Nothing is saved to your item until you choose to apply it. Nothing is sent to
-          Google unless you click the button.
+          to return the suggestion. Nothing is saved to your item until you choose to apply it.
         </p>
+        <p>
+          When you check an item's price, we send its details (title, description, brand, size, condition, book
+          details), up to two of its photos, and the titles and prices of the comparable listings found, to the
+          Gemini API, which says which of those listings are the same item. Its verdicts and notes are saved with the
+          price check. Your private notes and costs are not sent.
+        </p>
+        <p>Nothing is sent to Google unless you click one of these buttons.</p>
 
         <h2>Who handles your data</h2>
         <ul>
@@ -108,7 +116,7 @@ export function Privacy() {
             <strong>Cloudflare</strong> hosts the app and stores your account, inventory and photos.
           </li>
           <li>
-            <strong>Google</strong> (Gemini API) processes photos and text when you use auto-fill.
+            <strong>Google</strong> (Gemini API) processes photos and text when you use auto-fill or check prices.
           </li>
           <li>
             <strong>Sentry</strong> receives error reports so we can fix bugs.

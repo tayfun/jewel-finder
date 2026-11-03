@@ -1,7 +1,7 @@
-import type { AuthResponse, AutofillSuggestion, ItemWithListings } from "@jf/shared";
+import type { AuthResponse, AutofillSuggestion, Comp, ItemWithListings, PriceCheck } from "@jf/shared";
 import { exports } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { describeGeminiError, normaliseSuggestion } from "../src/ai";
+import { describeGeminiError, normaliseReview, normaliseSuggestion, reviewPrompt } from "../src/ai";
 
 const BASE = "https://jf.test";
 const PNG = Uint8Array.from(
@@ -217,5 +217,140 @@ describe("book details on items", () => {
     expect(patched.data).toMatchObject({ packageSize: "small", weightGrams: 650 });
     const bad = await call(`/api/items/${item.id}`, { token, method: "PATCH", json: { packageSize: "crate" } });
     expect(bad.status).toBe(400);
+  });
+});
+
+describe("AI review of price checks", () => {
+  const day = 86_400_000;
+  const sold = (title: string, pounds: number, i: number): Comp => ({
+    source: "ebay_sold", title, price: pounds * 100, url: `https://www.ebay.co.uk/itm/${200000000 + i}`, soldAt: Date.now() - i * day,
+  });
+  const comps = [
+    ...[90, 100, 110, 120].map((p, i) => sold("The Hobbit Tolkien 1937 first edition hardback", p, i)),
+    // The rules can tell this one isn't a first edition.
+    sold("Hobbit Tolkien 1937 1st edition facsimile hardback", 6, 5),
+    sold("Job lot 20 Tolkien books", 50, 6),
+  ];
+  const firstEdition = { edition: "First edition", format: "hardback", author: "J.R.R. Tolkien" };
+
+  /** Gemini answers with `review`; records what it was sent. */
+  function gemini(review: (body: any) => object | Response) {
+    const realFetch = globalThis.fetch;
+    const sent: any[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const req = new Request(input, init);
+      if (!req.url.includes("generativelanguage.googleapis.com")) return realFetch(input, init);
+      const body = await req.json();
+      sent.push(body);
+      const out = review(body);
+      if (out instanceof Response) return out;
+      return Response.json({ candidates: [{ content: { role: "model", parts: [{ text: JSON.stringify(out) }] } }] });
+    });
+    return sent;
+  }
+
+  async function hobbit() {
+    const { token, item } = await itemWithPhoto();
+    await call(`/api/items/${item.id}`, { token, method: "PATCH", json: { title: "The Hobbit Tolkien 1937 First Edition Hardback", book: firstEdition } });
+    return { token, item };
+  }
+
+  it("asks Gemini which comps are the same edition and applies its verdicts", async () => {
+    const { token, item } = await hobbit();
+    const sent = gemini(() => ({
+      comps: [
+        { n: 1, judgement: "same", reason: "" },
+        { n: 2, judgement: "same", reason: "" },
+        { n: 3, judgement: "same", reason: "" },
+        { n: 4, judgement: "lesser", reason: "Book club edition." },
+      ],
+      note: "Check the number line on the copyright page.",
+    }));
+    const res = await call<PriceCheck>(`/api/items/${item.id}/price-check`, { token, json: { queries: ["hobbit"], comps } });
+    expect(res.status).toBe(201);
+
+    // The photo, then the item and the comps worth judging: not the lot, which the rules already dropped.
+    const parts = sent[0].contents[0].parts;
+    expect(parts[0].inlineData.mimeType).toBe("image/png");
+    const prompt: string = parts.at(-1).text;
+    expect(prompt).toContain("Edition: First edition");
+    expect(prompt).toContain("Collectable features: First edition");
+    expect(prompt).toMatch(/1\. The Hobbit Tolkien 1937 first edition hardback \[Sold on eBay, £90\.00, \d{4}-\d\d-\d\d\]/);
+    expect(prompt).not.toMatch(/Job lot|facsimile/);
+    expect(sent[0].generationConfig.responseJsonSchema.properties.comps).toBeDefined();
+
+    expect(res.data.ai).toMatchObject({ status: "done", note: "Check the number line on the copyright page." });
+    expect(res.data.aiOutdated).toBe(false);
+    expect(res.data.summary.assessments.map((a) => a.verdict)).toEqual(["match", "match", "match", "ordinary", "dropped", "dropped"]);
+    expect(res.data.summary.assessments[3]).toMatchObject({ reason: "AI: Book club edition", ai: "lesser" });
+    expect(res.data.summary.aiChanged).toBe(1);
+    expect(res.data.summary.suggestions[0]!.count).toBe(3);
+
+    // Change what the item is: the review is outdated and no longer applied, until it's run again.
+    await call(`/api/items/${item.id}`, { token, method: "PATCH", json: { book: { ...firstEdition, signed: true } } });
+    const outdated = await call<PriceCheck>(`/api/items/${item.id}/price-check`, { token });
+    expect(outdated.data.aiOutdated).toBe(true);
+    expect(outdated.data.summary.aiChanged).toBe(0);
+
+    const again = await call<PriceCheck>(`/api/items/${item.id}/price-check/review`, { token, json: {} });
+    expect(again.status).toBe(200);
+    expect(again.data.id).toBe(res.data.id);
+    expect(again.data.aiOutdated).toBe(false);
+    expect(sent).toHaveLength(2);
+    expect(sent[1].contents[0].parts.at(-1).text).toContain("Signed: yes");
+  });
+
+  it("still saves the check when Gemini fails, and says why", async () => {
+    const { token, item } = await hobbit();
+    gemini(() => Response.json({ error: { code: 503, message: "Overloaded", status: "UNAVAILABLE" } }, { status: 503 }));
+    const res = await call<PriceCheck>(`/api/items/${item.id}/price-check`, { token, json: { queries: ["hobbit"], comps } });
+    expect(res.status).toBe(201);
+    expect(res.data.ai).toMatchObject({ status: "failed", error: "Gemini is busy right now. Please try again in a minute." });
+    expect(res.data.summary.suggestions[0]!.count).toBe(4);
+
+    const retry = await call<{ error: string }>(`/api/items/${item.id}/price-check/review`, { token, json: {} });
+    expect(retry.status).toBe(502);
+    expect(retry.data.error).toMatch(/busy/);
+  }, 20_000);
+
+  it("can't review a check that doesn't exist", async () => {
+    const { token, item } = await itemWithPhoto(false);
+    expect((await call(`/api/items/${item.id}/price-check/review`, { token, json: {} })).status).toBe(404);
+  });
+});
+
+describe("normaliseReview", () => {
+  const comps: Comp[] = ["a", "b", "c"].map((x) => ({ source: "ebay_listed", title: x, price: 100, url: `https://x.test/${x}` }));
+
+  it("maps judgements to comps by number and skips what doesn't check out", () => {
+    const out = normaliseReview(
+      {
+        comps: [
+          { n: 1, judgement: "different", reason: "Different volume." },
+          { n: 1, judgement: "same", reason: "duplicate answer" },
+          { n: 2, judgement: "maybe", reason: "" },
+          { n: 9, judgement: "same", reason: "" },
+          "junk",
+          { n: 3, judgement: "greater" },
+        ],
+        note: 5,
+      },
+      comps,
+    );
+    expect(out).toEqual({
+      judgements: { "https://x.test/a": { judgement: "different", reason: "Different volume" }, "https://x.test/c": { judgement: "greater", reason: "" } },
+      note: "",
+    });
+  });
+
+  it("rejects output that isn't a review", () => {
+    expect(() => normaliseReview({ title: "x" }, comps)).toThrow(/unexpected response/);
+  });
+
+  it("describes ordinary items without collectable features", () => {
+    const prompt = reviewPrompt({ title: "Levi's 501 W32", description: "", tags: [], book: null, condition: "good", brand: "Levi's", size: "W32" }, comps, "EUR");
+    expect(prompt).toContain("Collectable features: none");
+    expect(prompt).toContain("Size: W32");
+    expect(prompt).toMatch(/3\. c \[Listed on eBay, €1\.00\]/);
   });
 });

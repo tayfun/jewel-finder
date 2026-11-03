@@ -273,7 +273,11 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
     const check = await api<PriceCheck>(`/api/items/${itemId}/price-check`, {
       json: { queries: [...used], comps: comps.slice(0, 400), problems },
     });
-    return { checkId: check.id };
+    return { checkId: check.id, check };
+  },
+
+  async SET_PRICE({ itemId, price }) {
+    return api<ItemWithListings>(`/api/items/${itemId}`, { method: "PATCH", json: { price } });
   },
 
   async COMPS_FOUND({ comps, problem }, sender) {

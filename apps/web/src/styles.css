@@ -502,3 +502,5 @@ label.checkbox-row { flex-direction: row; align-items: center; gap: 0.45rem; mar
 .comp-side .small { color: var(--muted); }
 .comp.v-match .comp-side .small { color: var(--accent); }
 .comp.v-dropped { opacity: 0.55; }
+.ai-note { background: var(--accent-soft); border-radius: var(--radius-sm); padding: 0.6rem 0.85rem; margin: 0.5rem 0; }
+.ai-note p { margin: 0.25rem 0 0; }

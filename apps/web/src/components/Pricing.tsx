@@ -3,6 +3,7 @@ import {
   MARKETPLACE_LABELS,
   formatMoney,
   specialFeatures,
+  type CompJudgement,
   type CompVerdict,
   type ItemWithListings,
   type PriceCheck,
@@ -18,6 +19,12 @@ const DAY = 86_400_000;
 const STALE_DAYS = 30;
 const VERDICT_ORDER: Record<CompVerdict, number> = { match: 0, ordinary: 1, dropped: 2 };
 const VERDICT_LABELS: Record<CompVerdict, string> = { match: "Used", ordinary: "Ordinary copy", dropped: "Not used" };
+const AI_LABELS: Record<CompJudgement, string> = {
+  same: "same item",
+  lesser: "a lesser copy",
+  greater: "a better copy than yours",
+  different: "a different item",
+};
 
 /** Collectable flags, and prices worked out from comparable sold/listed items (PRICING.md). */
 export function Pricing({ item, onPriced }: { item: ItemWithListings; onPriced(item: ItemWithListings): void }) {
@@ -33,6 +40,7 @@ export function Pricing({ item, onPriced }: { item: ItemWithListings; onPriced(i
     [item.id, item.updatedAt],
   );
   const [running, setRunning] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState("");
   const [showComps, setShowComps] = useState(false);
   const money = (v: number | null) => formatMoney(v, settings.currency);
@@ -49,6 +57,20 @@ export function Pricing({ item, onPriced }: { item: ItemWithListings; onPriced(i
       setError((e as Error).message);
     } finally {
       setRunning(false);
+    }
+  }
+
+  /** Asks Gemini to judge the latest check's comps again (failed last time, or the item changed). */
+  async function review() {
+    setReviewing(true);
+    setError("");
+    try {
+      await api<PriceCheck>(`/api/items/${item.id}/price-check/review`, { json: {} });
+      await check.reload();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setReviewing(false);
     }
   }
 
@@ -124,6 +146,28 @@ export function Pricing({ item, onPriced }: { item: ItemWithListings; onPriced(i
               {p}
             </p>
           ))}
+          {c.ai?.status === "done" && !c.aiOutdated && c.ai.note && (
+            <div className="ai-note small">
+              <strong>✨ What to check</strong>
+              <p>{c.ai.note}</p>
+            </div>
+          )}
+          {c.ai && (c.ai.status === "failed" || c.aiOutdated || Object.keys(c.ai.judgements).length > 0) && (
+            <p className="muted small">
+              {c.ai.status === "failed"
+                ? `✨ AI review didn't run: ${c.ai.error ?? "unknown error"} `
+                : c.aiOutdated
+                  ? "✨ The item changed since the AI reviewed these comparables, so its verdicts aren't applied. "
+                  : c.summary.aiChanged
+                    ? `✨ AI reviewed the comparables and changed ${c.summary.aiChanged} verdict${c.summary.aiChanged === 1 ? "" : "s"} (see "AI:" reasons). `
+                    : "✨ AI reviewed the comparables and agreed with the matches. "}
+              {(c.ai.status === "failed" || c.aiOutdated) && (
+                <button className="link" disabled={reviewing || running} onClick={() => void review()}>
+                  {reviewing ? "Reviewing…" : "Review again"}
+                </button>
+              )}
+            </p>
+          )}
           <p className="muted small">
             Checked {ageDays === 0 ? "today" : `${ageDays} day${ageDays === 1 ? "" : "s"} ago`} · {c.comps.length} comparable
             {c.comps.length === 1 ? "" : "s"} found{ageDays >= STALE_DAYS ? " · prices move, check again" : ""} ·{" "}
@@ -152,6 +196,12 @@ export function Pricing({ item, onPriced }: { item: ItemWithListings; onPriced(i
                     <span className="small" title={a.reason}>
                       {VERDICT_LABELS[a.verdict]}
                       {a.reason ? `: ${a.reason}` : ""}
+                      {a.ai && !a.reason.startsWith("AI:") && (
+                        <span className="muted" title={`AI: ${AI_LABELS[a.ai]}`}>
+                          {" "}
+                          ✨
+                        </span>
+                      )}
                     </span>
                   </div>
                 </li>

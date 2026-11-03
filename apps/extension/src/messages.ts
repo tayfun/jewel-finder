@@ -1,4 +1,4 @@
-import type { Account, Comp, CompSource, Condition, ImportState, ItemStatus, ItemWithListings, Marketplace, Settings } from "@jf/shared";
+import type { Account, Comp, CompSource, Condition, ImportState, ItemStatus, ItemWithListings, Marketplace, PriceCheck, Settings } from "@jf/shared";
 
 export interface Job {
   /**
@@ -86,6 +86,8 @@ export type Request =
   | { type: "IMPORT_LISTING"; marketplace: Marketplace; listing: ScrapedListing }
   /** Search for comparables and save a price check for the item. */
   | { type: "START_PRICE_CHECK"; itemId: string; token?: string }
+  /** Set the item's price (minor units), e.g. to a price check's suggestion. */
+  | { type: "SET_PRICE"; itemId: string; price: number }
   /** From a comps tab: what its search results page showed. */
   | { type: "COMPS_FOUND"; comps: Comp[]; problem?: string }
   /** eBay serves descriptions from another origin, which the page itself can't read. */
@@ -112,7 +114,8 @@ export interface Responses {
   /** possibleDuplicate: the new item looks like one already in the inventory. */
   IMPORT_LISTING: { itemId: string; created: boolean; photos: number; possibleDuplicate: boolean };
   FETCH_DESCRIPTION: string;
-  START_PRICE_CHECK: { checkId: string };
+  START_PRICE_CHECK: { checkId: string; check: PriceCheck };
+  SET_PRICE: ItemWithListings;
   COMPS_FOUND: null;
 }
 

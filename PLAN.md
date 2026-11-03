@@ -87,8 +87,9 @@ POST   /api/items/import       {marketplace, listings[≤50]} → {results: [{ex
 GET    /api/listings?marketplace=                          → {listings}  (what's already imported)
 POST   /api/items/:id/merge    {otherId}                   → item   (409: both live on one marketplace)
 GET    /api/duplicates?itemId=                             → {pairs: [{a, b, score, reasons}]}
-POST   /api/items/:id/price-check {queries, comps, problems} → check (summary worked out here)
+POST   /api/items/:id/price-check {queries, comps, problems} → check (summary worked out here, Gemini reviews the comps)
 GET    /api/items/:id/price-check                          → latest check, re-assessed against the item
+POST   /api/items/:id/price-check/review                   → latest check with a fresh AI review (502 if it fails)
 POST   /api/duplicates/dismiss {a, b}                      → 204    ("not duplicates", remembered)
 PUT    /api/items/:id/listings/:marketplace  ListingInput  → listing (upsert)
 DELETE /api/items/:id/listings/:marketplace                → 204
@@ -202,7 +203,8 @@ the Worker, uploads source maps to Sentry (when configured) and runs `wrangler d
 
 (Imports and relist & bump are built: see section 4, steps 7 and 9.)
 
-**Pricing from comparables** (steps 1–4 of PRICING.md built: shared core, extension, API, web). Suggest a price from what the same or similar items sold for (eBay sold
+**Pricing from comparables** (steps 1–5 of PRICING.md built: shared core, extension, API, web and side
+panel, AI review). Suggest a price from what the same or similar items sold for (eBay sold
 searches), or failing that are listed at (eBay, Vinted), with collectable features (first edition,
 signed, rare…) flagged and matched like for like. Full plan: [PRICING.md](PRICING.md).
 

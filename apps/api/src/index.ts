@@ -14,15 +14,19 @@ import {
   type ApiError,
   type AuthResponse,
   type AutofillSuggestion,
+  compsForReview,
+  type AiReview,
+  type Comp,
   type DuplicatePair,
   type ImportResult,
+  type ItemWithListings,
 } from "@jf/shared";
 import * as Sentry from "@sentry/cloudflare";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
-import { AutofillError, suggestListing } from "./ai";
+import { AiError, reviewComps, suggestListing, type ImageInput } from "./ai";
 import { hashPassword, issueToken, readToken, verifyPassword } from "./auth";
 import { sentryOptions } from "./sentry";
 
@@ -230,10 +234,46 @@ app.post("/api/items/:id/merge", async (c) => {
 
 // ----------------------------------------------------------- price checks
 
-// Comparables the extension found for the item; the server works out the suggested price.
+/** The item's photos from R2, in order, at most `max` of them. */
+async function itemImages(env: Env, keys: string[], max = keys.length): Promise<ImageInput[]> {
+  const images: ImageInput[] = [];
+  for (const key of keys.slice(0, max)) {
+    const obj = await env.IMAGES.get(key);
+    if (!obj) continue;
+    images.push({ mimeType: obj.httpMetadata?.contentType ?? "image/jpeg", bytes: new Uint8Array(await obj.arrayBuffer()) });
+  }
+  return images;
+}
+
+/** Gemini's review of the comps. Never fails the price check: a failed review is recorded as such. */
+async function reviewSafely(c: Context<AppEnv>, item: ItemWithListings, comps: Comp[]): Promise<AiReview> {
+  try {
+    const [images, account] = await Promise.all([itemImages(c.env, item.images, 2), c.var.account.getAccount()]);
+    return await reviewComps(c.env, item, compsForReview(item, comps), images, account?.settings.currency);
+  } catch (e) {
+    if (!(e instanceof AiError)) Sentry.captureException(e);
+    const error = e instanceof AiError ? e.message : "The AI review failed.";
+    return { status: "failed", at: Date.now(), basis: "", judgements: {}, note: "", error };
+  }
+}
+
+// Comparables the extension found for the item; the server works out the suggested price, with
+// Gemini's view of which comps are really the same item when AI is set up (PRICING.md §8).
 app.post("/api/items/:id/price-check", async (c) => {
   const input = parse(PriceCheckInput, await body(c));
-  return c.json((await c.var.account.savePriceCheck(c.req.param("id"), input)) ?? notFound(), 201);
+  const item = (await c.var.account.getItem(c.req.param("id"))) ?? notFound();
+  const ai = c.env.GEMINI_API_KEY ? await reviewSafely(c, item, input.comps) : null;
+  return c.json((await c.var.account.savePriceCheck(item.id, input, ai)) ?? notFound(), 201);
+});
+
+// Reviews the latest check's comps again, e.g. after the item changed or the last review failed.
+app.post("/api/items/:id/price-check/review", async (c) => {
+  if (!c.env.GEMINI_API_KEY) throw new HTTPException(503, { message: "AI isn't set up on this server yet" });
+  const item = (await c.var.account.getItem(c.req.param("id"))) ?? notFound();
+  const check = (await c.var.account.latestPriceCheck(item.id)) ?? notFound("Price check");
+  const ai = await reviewSafely(c, item, check.comps);
+  if (ai.status === "failed") throw new HTTPException(502, { message: ai.error ?? "The AI review failed." });
+  return c.json((await c.var.account.setPriceCheckReview(item.id, check.id, ai)) ?? notFound());
 });
 
 app.get("/api/items/:id/price-check", async (c) => {
@@ -264,19 +304,11 @@ app.post("/api/items/:id/autofill", async (c) => {
   if (!c.env.GEMINI_API_KEY) throw new HTTPException(503, { message: "AI auto-fill isn't set up on this server yet" });
   const item = (await c.var.account.getItem(c.req.param("id"))) ?? notFound();
   if (!item.images.length) throw new HTTPException(400, { message: "Add at least one photo first" });
-  const images = [];
-  for (const key of item.images) {
-    const obj = await c.env.IMAGES.get(key);
-    if (!obj) continue;
-    images.push({
-      mimeType: obj.httpMetadata?.contentType ?? "image/jpeg",
-      bytes: new Uint8Array(await obj.arrayBuffer()),
-    });
-  }
+  const images = await itemImages(c.env, item.images);
   try {
     return c.json<{ suggestion: AutofillSuggestion }>({ suggestion: await suggestListing(c.env, images, item) });
   } catch (e) {
-    if (e instanceof AutofillError) throw new HTTPException(502, { message: e.message });
+    if (e instanceof AiError) throw new HTTPException(502, { message: e.message });
     throw e;
   }
 });

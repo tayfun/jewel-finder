@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  aiReviewBasis,
   assessComp,
   compFeatures,
+  compsForReview,
+  currentJudgements,
   nicePrice,
   priceQueries,
   priceSummary,
   quantile,
   specialFeatures,
   withoutOutliers,
+  type AiReview,
   type Comp,
 } from "./pricing";
 import { BookDetails, type Item } from "./schemas";
@@ -179,5 +183,73 @@ describe("price summary", () => {
 
   it("says when nothing was found", () => {
     expect(priceSummary(jeans, [], NOW)).toMatchObject({ suggestions: [], ordinaryFloor: null, warnings: ["No comparable listings found. Try a shorter title, or check by hand."] });
+  });
+});
+
+describe("AI review of comps", () => {
+  const firstEd = (pounds: number, i: number) => sold("The Hobbit Tolkien 1937 First Edition 1st Impression hardback", pounds, 30, { url: `https://www.ebay.co.uk/itm/f${i}` });
+
+  it("only makes verdicts stricter, so it can't push a collectable's price up", () => {
+    const comp = firstEd(12000, 0);
+    expect(assessComp(hobbitFirst, comp).verdict).toBe("match");
+    // A facsimile titled like a first edition: the AI spots it.
+    expect(assessComp(hobbitFirst, comp, undefined, { judgement: "lesser", reason: "1990s facsimile of the first edition" })).toMatchObject({
+      verdict: "ordinary",
+      reason: "AI: 1990s facsimile of the first edition",
+      ai: "lesser",
+    });
+    expect(assessComp(hobbitFirst, comp, undefined, { judgement: "different", reason: "" })).toMatchObject({ verdict: "dropped", reason: "AI: a different item" });
+    // An ordinary copy stays one, whatever the AI says.
+    const reprint = sold("The Hobbit Tolkien hardback 1951", 90);
+    expect(assessComp(hobbitFirst, reprint, undefined, { judgement: "same", reason: "" })).toMatchObject({ verdict: "ordinary", ai: "same" });
+    // Objective drops stand.
+    expect(assessComp(hobbitFirst, sold("Job lot 20 Tolkien books Hobbit first edition", 500), undefined, { judgement: "same", reason: "" }).verdict).toBe("dropped");
+  });
+
+  it("lets back in a comp whose title only reads differently, still judged on the other rules", () => {
+    const jeans = item({ title: "Levi's 501 jeans W32", brand: "Levi's", size: "W32", condition: "good" });
+    const comp = listed("LVS Strauss straight leg denim 32W vintage blue", 25, "vinted_listed", { size: "W32" });
+    expect(assessComp(jeans, comp)).toMatchObject({ verdict: "dropped", reason: "Different item" });
+    expect(assessComp(jeans, comp, undefined, { judgement: "same", reason: "Levi's 501, same fit" })).toMatchObject({ verdict: "match", ai: "same" });
+    expect(assessComp(jeans, { ...comp, size: "W36" }, undefined, { judgement: "same", reason: "" }).verdict).toBe("dropped");
+  });
+
+  it("prices with the judgements of a review that matches the item, and counts what changed", () => {
+    const comps = [10000, 11000, 12000, 13000].map(firstEd);
+    const review: AiReview = {
+      status: "done",
+      at: NOW,
+      basis: aiReviewBasis(hobbitFirst),
+      judgements: { [comps[3]!.url]: { judgement: "lesser", reason: "Book club edition" } },
+      note: "",
+    };
+    const judgements = currentJudgements(hobbitFirst, review);
+    const s = priceSummary(hobbitFirst, comps, NOW, judgements);
+    expect(s.assessments.map((a) => a.verdict)).toEqual(["match", "match", "match", "ordinary"]);
+    expect(s.aiChanged).toBe(1);
+    expect(s.suggestions[0]!.count).toBe(3);
+
+    // The seller corrects the item: the review no longer applies.
+    expect(currentJudgements({ ...hobbitFirst, book: { ...hobbitFirst.book!, printing: "Second impression" } }, review)).toBeUndefined();
+    expect(currentJudgements(hobbitFirst, { ...review, status: "failed" })).toBeUndefined();
+    expect(priceSummary(hobbitFirst, comps, NOW).aiChanged).toBe(0);
+  });
+
+  it("shows the AI the comps worth judging, sold and closest first", () => {
+    const comps = [
+      listed("The Hobbit Tolkien 1937 first edition hardback", 15000, "vinted_listed"),
+      firstEd(12000, 1),
+      sold("Job lot 20 Tolkien books", 50),
+      sold("Lord of the Rings Tolkien first edition", 3000),
+      sold("Tolkien Hobbit 1st edn 1937 Allen & Unwin", 9000, 20, { url: "https://www.ebay.co.uk/itm/near" }),
+    ];
+    const picked = compsForReview(hobbitFirst, comps);
+    // Sold before listed; the job lot and the other book aren't worth asking about.
+    expect(picked.map((c) => c.title)).toEqual([
+      "The Hobbit Tolkien 1937 First Edition 1st Impression hardback",
+      "Tolkien Hobbit 1st edn 1937 Allen & Unwin",
+      "The Hobbit Tolkien 1937 first edition hardback",
+    ]);
+    expect(compsForReview(hobbitFirst, comps, 1)).toHaveLength(1);
   });
 });

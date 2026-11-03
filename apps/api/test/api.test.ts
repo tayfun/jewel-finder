@@ -1,6 +1,6 @@
 import type { AuthResponse, DuplicatePair, ImportResult, ItemWithListings, Listing, PriceCheck, Stats } from "@jf/shared";
 import { exports } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const BASE = "https://jf.test";
 
@@ -395,7 +395,15 @@ describe("relisting", () => {
 });
 
 describe("price checks", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("works out a price from the comps, keeps it, and re-assesses when the item changes", async () => {
+    // AI is set up in tests but Gemini refuses: the check is still saved, priced by the rules alone.
+    const realFetch = globalThis.fetch;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (!new Request(input, init).url.includes("generativelanguage.googleapis.com")) return realFetch(input, init);
+      return Response.json({ error: { code: 400, message: "API key not valid", status: "INVALID_ARGUMENT" } }, { status: 400 });
+    });
     const { token } = await signUp();
     const { data: item } = await call<ItemWithListings>("/api/items", { token, json: { title: "The Hobbit Tolkien 1951 hardback", condition: "good" } });
     expect((await call(`/api/items/${item.id}/price-check`, { token })).status).toBe(404);
@@ -414,6 +422,8 @@ describe("price checks", () => {
       json: { queries: ["hobbit 1951 tolkien"], comps, problems: ["Listed on Vinted, “hobbit”: Couldn't read the search results"] },
     });
     expect(saved.status).toBe(201);
+    expect(saved.data.ai).toMatchObject({ status: "failed", error: expect.stringMatching(/Gemini rejected/) });
+    expect(saved.data.summary.aiChanged).toBe(0);
     expect(saved.data.summary.suggestions[0]).toMatchObject({ marketplace: "ebay", basis: "sold", count: 5 });
     expect(saved.data.summary.suggestions[0]!.price).toBe(9000);
     expect(saved.data.summary.assessments.map((a) => a.verdict)).toEqual([

@@ -7,7 +7,9 @@ import {
   Settings,
   findDuplicatePairs,
   isStale,
+  currentJudgements,
   priceSummary,
+  type AiReview,
   type Comp,
   type PriceCheck,
   pairKey,
@@ -95,6 +97,8 @@ const MIGRATIONS = [
      summary TEXT NOT NULL
    );
    CREATE INDEX price_checks_item ON price_checks(item_id, created_at DESC);`,
+  // v8: Gemini's review of a check's comps (PRICING.md §8), JSON; NULL when AI isn't set up.
+  `ALTER TABLE price_checks ADD COLUMN ai TEXT;`,
 ];
 
 type Row = Record<string, SqlStorageValue>;
@@ -492,28 +496,27 @@ class AccountDOBase extends DurableObject<Env> {
   // ----------------------------------------------------------- price checks
 
   /** Saves what the extension found and works out the price from it (here, so there's one source of truth). */
-  async savePriceCheck(itemId: string, input: { queries: string[]; comps: Comp[]; problems: string[] }): Promise<PriceCheck | null> {
+  async savePriceCheck(
+    itemId: string,
+    input: { queries: string[]; comps: Comp[]; problems: string[] },
+    ai: AiReview | null = null,
+  ): Promise<PriceCheck | null> {
     const item = await this.getItem(itemId);
     if (!item) return null;
-    const check: PriceCheck = {
-      id: crypto.randomUUID(),
-      itemId,
-      createdAt: Date.now(),
-      queries: input.queries,
-      comps: input.comps,
-      problems: input.problems,
-      summary: priceSummary(item, input.comps),
-    };
+    const id = crypto.randomUUID();
+    const createdAt = Date.now();
     const db = this.db();
     db.exec(
-      "INSERT INTO price_checks (id, item_id, created_at, queries, comps, problems, summary) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      check.id,
+      "INSERT INTO price_checks (id, item_id, created_at, queries, comps, problems, summary, ai) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      id,
       itemId,
-      check.createdAt,
-      JSON.stringify(check.queries),
-      JSON.stringify(check.comps),
-      JSON.stringify(check.problems),
-      JSON.stringify(check.summary),
+      createdAt,
+      JSON.stringify(input.queries),
+      JSON.stringify(input.comps),
+      JSON.stringify(input.problems),
+      // The summary as it was then; what's shown is always worked out afresh (see priceCheckFrom).
+      JSON.stringify(priceSummary(item, input.comps, createdAt, currentJudgements(item, ai))),
+      ai ? JSON.stringify(ai) : null,
     );
     // Keep a short history per item (a price trail), not every check ever.
     db.exec(
@@ -522,18 +525,27 @@ class AccountDOBase extends DurableObject<Env> {
       itemId,
       itemId,
     );
-    return check;
+    return this.latestPriceCheck(itemId);
+  }
+
+  /** Replaces the AI review of the item's latest price check. */
+  async setPriceCheckReview(itemId: string, checkId: string, ai: AiReview): Promise<PriceCheck | null> {
+    this.db().exec("UPDATE price_checks SET ai = ? WHERE id = ? AND item_id = ?", JSON.stringify(ai), checkId, itemId);
+    return this.latestPriceCheck(itemId);
   }
 
   /**
    * The latest price check, re-assessed against the item as it is now: fixing the edition or
-   * condition changes the verdicts without searching again.
+   * condition changes the verdicts without searching again. The AI's judgements count only while the
+   * item is still what it reviewed.
    */
   async latestPriceCheck(itemId: string): Promise<PriceCheck | null> {
     const item = await this.getItem(itemId);
     const r = this.db().exec("SELECT * FROM price_checks WHERE item_id = ? ORDER BY created_at DESC LIMIT 1", itemId).toArray()[0];
     if (!item || !r) return null;
     const comps = JSON.parse(r.comps as string) as Comp[];
+    const ai = r.ai ? (JSON.parse(r.ai as string) as AiReview) : null;
+    const judgements = currentJudgements(item, ai);
     return {
       id: r.id as string,
       itemId,
@@ -541,7 +553,9 @@ class AccountDOBase extends DurableObject<Env> {
       queries: JSON.parse(r.queries as string),
       comps,
       problems: JSON.parse(r.problems as string),
-      summary: priceSummary(item, comps, r.created_at as number),
+      ai,
+      aiOutdated: ai?.status === "done" && !judgements,
+      summary: priceSummary(item, comps, r.created_at as number, judgements),
     };
   }
 

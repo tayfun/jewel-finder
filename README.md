@@ -55,7 +55,8 @@ a reason) and you confirm → once the listing is gone it's marked ended.
 
 The **Pricing** card on each item page shows its collectable features (first edition, signed, limited,
 rare, proof, dust jacket, format) with the evidence on hover, and **💷 Check prices** works out a price
-from comparable items. Full design: [PRICING.md](PRICING.md).
+from comparable items. The side panel has the same check (**💷 Price** on each item), with the
+suggestions and a **Use** button right there. Full design: [PRICING.md](PRICING.md).
 
 - **Searching:** the extension opens eBay *sold* searches first, then eBay Buy It Now and Vinted listings,
   each in a background tab that closes again (about 8 s locally; longer on the real sites). Queries go
@@ -67,11 +68,19 @@ from comparable items. Full design: [PRICING.md](PRICING.md).
   nudged by condition and rounded; from current asking prices (aimed low, and labelled) only when nothing
   sold. A collectable item without matching comps gets no number, just "ordinary copies go for about £X;
   yours is likely worth more". **Use £X** sets the price.
+- **AI review** (when `GEMINI_API_KEY` is set): Gemini gets the item (details and up to 2 photos) and
+  the comps the rules kept or nearly kept, and judges each one *same item*, *lesser copy* (later
+  printing, book club, unsigned…), *better copy* or *different item*. It can only make a verdict
+  stricter (so it can't push a collectable's price up), except that it can let back in a comp the rules
+  dropped only because its title was worded differently. Lots, parts, sizes and formats stay dropped.
+  For collectables it also writes a short "what to check" note. The price is still worked out by the
+  rules from the comps' own prices. A failed review never fails the check; the card says why and offers
+  "Review again", as it does when you edit the item after a review (an outdated review isn't applied).
 - **Show comparables** lists every comp with its verdict and reason, linked to the listing. The latest
   check is re-assessed when you edit the item, so fixing the edition re-prices it without searching again.
 
 Code: `packages/shared/src/pricing.ts` (features, queries, verdicts, maths), `apps/extension/src/lib/comps.ts`
-(results parsers), `apps/web/src/components/Pricing.tsx`. The parsers are tested against approximations
+(results parsers), `apps/api/src/ai.ts` (`reviewComps`), `apps/web/src/components/Pricing.tsx`. The parsers are tested against approximations
 of the results pages, not live ones yet.
 
 ### Relist & bump
@@ -191,7 +200,7 @@ and photos are not sent. 4xx responses and the 503 "not configured" response are
 cd apps/api
 npx wrangler r2 bucket create jewel-finder-images
 npx wrangler secret put JWT_SECRET      # a long random string
-npx wrangler secret put GEMINI_API_KEY  # Google AI Studio key, for "Auto-fill from photos"
+npx wrangler secret put GEMINI_API_KEY  # Google AI Studio key, for "Auto-fill from photos" and price-check reviews
 npx wrangler secret put SENTRY_DSN      # Sentry project DSN for the API (optional)
 cd ../..
 cp .env.sentry.example .env.sentry      # optional: Sentry auth token + web DSN

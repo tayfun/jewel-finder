@@ -3,14 +3,24 @@ import * as Sentry from "@sentry/cloudflare";
 import {
   BOOK_FORMATS,
   BookDetails,
+  COMP_JUDGEMENTS,
+  COMP_SOURCE_LABELS,
   CONDITIONS,
+  CONDITION_LABELS,
   Condition,
   PACKAGE_SIZES,
   PackageSize,
   RARITIES,
+  aiReviewBasis,
+  formatMoney,
   isValidIsbn,
+  specialFeatures,
+  type AiJudgement,
+  type AiReview,
   type AutofillSuggestion,
+  type Comp,
   type Item,
+  type Settings,
 } from "@jf/shared";
 import { z } from "zod";
 
@@ -107,7 +117,11 @@ const ModelOutput = z.object({
   notes: z.string().catch(""),
 });
 
-export class AutofillError extends Error {}
+/** A Gemini request that failed, with a message for the seller. */
+export class AiError extends Error {}
+
+type GeminiEnv = Pick<Env, "GEMINI_API_KEY" | "GEMINI_MODEL" | "GEMINI_FALLBACK_MODEL">;
+type Part = { inlineData?: { mimeType: string; data: string }; text?: string };
 
 /** HTTP status of a Gemini SDK error; a client-side timeout (aborted fetch, no status) counts as 504. */
 function geminiStatus(e: unknown): number | undefined {
@@ -118,12 +132,24 @@ function geminiStatus(e: unknown): number | undefined {
 }
 
 /** Turns a Gemini SDK error into something a seller can act on. */
-export function describeGeminiError(e: unknown): string {
+export function describeGeminiError(e: unknown, slow = "Gemini took too long on these photos. Please try again, or remove a few photos."): string {
   const status = geminiStatus(e);
   if (status === 429 || status === 503) return "Gemini is busy right now. Please try again in a minute.";
-  if (status === 504) return "Gemini took too long on these photos. Please try again, or remove a few photos.";
+  if (status === 504) return slow;
   if (status === 400 || status === 403) return `Gemini rejected the request (${status}). Check GEMINI_API_KEY and GEMINI_MODEL.`;
   return `The AI request failed: ${(e as Error).message}`;
+}
+
+/** Inline image parts, in order, up to a count and a total size. */
+function imageParts(images: ImageInput[], max: number, maxBytes: number): Part[] {
+  const parts: Part[] = [];
+  let total = 0;
+  for (const img of images.slice(0, max)) {
+    if (total + img.bytes.byteLength > maxBytes) break;
+    total += img.bytes.byteLength;
+    parts.push({ inlineData: { mimeType: img.mimeType, data: toBase64(img.bytes) } });
+  }
+  return parts;
 }
 
 function toBase64(bytes: Uint8Array): string {
@@ -137,7 +163,7 @@ function toBase64(bytes: Uint8Array): string {
 /** Turns raw model JSON into a validated suggestion, dropping anything that doesn't check out. */
 export function normaliseSuggestion(raw: unknown): AutofillSuggestion {
   const out = ModelOutput.safeParse(raw);
-  if (!out.success) throw new AutofillError("The AI returned an unexpected response. Try again.");
+  if (!out.success) throw new AiError("The AI returned an unexpected response. Try again.");
   const notes = [out.data.notes.trim()];
 
   const rawBook = out.data.book;
@@ -168,20 +194,14 @@ export function normaliseSuggestion(raw: unknown): AutofillSuggestion {
 
 /** Asks Gemini to identify the book in the photos and draft listing data for it. */
 export async function suggestListing(
-  env: Pick<Env, "GEMINI_API_KEY" | "GEMINI_MODEL" | "GEMINI_FALLBACK_MODEL">,
+  env: GeminiEnv,
   images: ImageInput[],
   item: Pick<Item, "title" | "description" | "notes">,
 ): Promise<AutofillSuggestion> {
-  if (!env.GEMINI_API_KEY) throw new AutofillError("AI auto-fill isn't configured (GEMINI_API_KEY is not set).");
+  if (!env.GEMINI_API_KEY) throw new AiError("AI auto-fill isn't configured (GEMINI_API_KEY is not set).");
 
-  const parts: { inlineData?: { mimeType: string; data: string }; text?: string }[] = [];
-  let total = 0;
-  for (const img of images.slice(0, MAX_IMAGES)) {
-    if (total + img.bytes.byteLength > MAX_IMAGE_BYTES_TOTAL) break;
-    total += img.bytes.byteLength;
-    parts.push({ inlineData: { mimeType: img.mimeType, data: toBase64(img.bytes) } });
-  }
-  if (!parts.length) throw new AutofillError("Add at least one photo first.");
+  const parts = imageParts(images, MAX_IMAGES, MAX_IMAGE_BYTES_TOTAL);
+  if (!parts.length) throw new AiError("Add at least one photo first.");
 
   const known = [
     item.title && `Seller's current title: ${item.title}`,
@@ -192,6 +212,24 @@ export async function suggestListing(
     text: `Identify this book and draft its listing.${known.length ? `\n\nWhat the seller already wrote (may be incomplete or wrong; prefer the photos):\n${known.join("\n")}` : ""}`,
   });
 
+  return normaliseSuggestion(
+    await generateJson(env, parts, {
+      systemInstruction: SYSTEM_INSTRUCTION,
+      schema: RESPONSE_SCHEMA,
+      empty: "The AI didn't return anything. Try again, or add clearer photos.",
+    }),
+  );
+}
+
+/**
+ * One structured-output Gemini request: the JSON it returned, unvalidated. Falls back from the newest
+ * model to an older one when the newest is overloaded or too slow.
+ */
+async function generateJson(
+  env: GeminiEnv,
+  parts: Part[],
+  opts: { systemInstruction: string; schema: object; empty: string; slow?: string },
+): Promise<unknown> {
   // Spans with model, latency and token usage; never the photos or prompt text.
   const ai = Sentry.instrumentGoogleGenAIClient(new GoogleGenAI({ apiKey: env.GEMINI_API_KEY }), {
     recordInputs: false,
@@ -208,11 +246,12 @@ export async function suggestListing(
         model,
         contents: [{ role: "user", parts }],
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: opts.systemInstruction,
           responseMimeType: "application/json",
-          responseJsonSchema: RESPONSE_SCHEMA,
+          responseJsonSchema: opts.schema,
           temperature: 0.2,
-          // Reading a copyright page doesn't need deep reasoning, and default thinking is most of the latency.
+          // Reading a copyright page or a list of titles doesn't need deep reasoning, and default
+          // thinking is most of the latency.
           thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           httpOptions: {
             // The SDK also sends this as X-Server-Timeout, so it is Gemini's own deadline: past it
@@ -232,16 +271,147 @@ export async function suggestListing(
       const status = geminiStatus(e);
       // Workers logs keep only the stack of an Error argument, so log the status and body explicitly.
       console.error("Gemini request failed", { model, status, message: (e as Error).message });
-      if (last || !(status === 429 || status === 503 || status === 504)) throw new AutofillError(describeGeminiError(e));
+      if (last || !(status === 429 || status === 503 || status === 504)) throw new AiError(describeGeminiError(e, opts.slow));
     }
   }
-  if (!text) throw new AutofillError("The AI didn't return anything. Try again, or add clearer photos.");
+  if (!text) throw new AiError(opts.empty);
 
-  let raw: unknown;
   try {
-    raw = JSON.parse(text);
+    return JSON.parse(text);
   } catch {
-    throw new AutofillError("The AI returned an unexpected response. Try again.");
+    throw new AiError("The AI returned an unexpected response. Try again.");
   }
-  return normaliseSuggestion(raw);
+}
+
+
+// ------------------------------------------------------------ comp review
+
+const REVIEW_INSTRUCTION = `You are an expert reseller of books, clothes and collectables on eBay and Vinted, helping a seller price one item.
+You are given the seller's item and a numbered list of comparable listings ("comps") found by searching eBay and Vinted: their titles, prices and where they were found.
+
+For each comp, judge whether it is a fair comparison for pricing the seller's item:
+- "same": the same item, like for like. For books: the same work in the same format, and the same edition when the seller's copy is a collectable edition. For clothes and other goods: the same brand and model or line.
+- "lesser": the same work or product, but missing something that makes the seller's copy worth more. E.g. the seller has a first edition and the comp is a later printing, book club edition, facsimile or reprint; the seller's copy is signed and the comp isn't; the comp has no dust jacket when the seller's has one.
+- "greater": the same work or product, with something valuable the seller's copy lacks: signed, a first edition when the seller's isn't, a limited or numbered edition, new with tags when the seller's is worn.
+- "different": not the same item: another title or volume, another model, an accessory, an empty box, a lot or bundle, a study guide or adaptation, "inspired by" or replica goods.
+
+Rules:
+- Judge only from what is given. When a title doesn't say enough to tell, answer "same": the price rules make their own checks. Use "lesser", "greater" or "different" only when the title, condition or price gives you a reason.
+- A price far below what a valuable edition sells for suggests a reprint or facsimile, not the real thing.
+- reason: at most 8 words, for the seller, e.g. "Book club edition", "Later printing (1951)", "Different volume", "Signed by the author".
+- Answer for every comp, using its number.
+
+note: only when the seller's item has collectable features (listed under "Collectable features"), write 2-4 short sentences for the seller: what makes this edition valuable (points of issue, first-state jacket, price-clipping, number lines), and what to check on their copy before pricing it high. Never state prices or values. When the item has no collectable features, return an empty string.`;
+
+export const REVIEW_SCHEMA = {
+  type: "object",
+  properties: {
+    comps: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          n: { type: "integer", description: "The comp's number." },
+          judgement: { type: "string", enum: [...COMP_JUDGEMENTS] },
+          reason: str("At most 8 words on why."),
+        },
+        required: ["n", "judgement", "reason"],
+      },
+    },
+    note: str("For collectable items: what drives the value and what to check. Otherwise empty."),
+  },
+  required: ["comps", "note"],
+} as const;
+
+const ReviewOutput = z.object({
+  comps: z.array(z.unknown()).catch([]),
+  note: z.string().catch(""),
+});
+const ReviewEntry = z.object({
+  n: z.number().int(),
+  judgement: z.enum(COMP_JUDGEMENTS),
+  reason: z.string().catch(""),
+});
+
+/** Item photos sent with a review: enough to see the edition, small enough to stay quick. */
+const REVIEW_IMAGES = 2;
+const REVIEW_IMAGE_BYTES = 6 * 1024 * 1024;
+
+type ReviewedItem = Pick<Item, "title" | "description" | "tags" | "book" | "condition" | "brand" | "size">;
+
+/** The item and comps as the model sees them. Comps are numbered from 1, in the order given. */
+export function reviewPrompt(item: ReviewedItem, comps: Comp[], currency: Settings["currency"] = "GBP"): string {
+  const b = item.book;
+  const features = specialFeatures(item);
+  const lines = [
+    `Title: ${item.title}`,
+    item.brand && `Brand: ${item.brand}`,
+    item.size && `Size: ${item.size}`,
+    item.condition && `Condition: ${CONDITION_LABELS[item.condition]}`,
+    b?.author && `Author: ${b.author}`,
+    b?.isbn && `ISBN: ${b.isbn}`,
+    b?.publisher && `Publisher: ${b.publisher}`,
+    b?.yearPublished && `Year: ${b.yearPublished}`,
+    b?.edition && `Edition: ${b.edition}`,
+    b?.printing && `Printing: ${b.printing}`,
+    b?.format && `Format: ${b.format.replace(/_/g, " ")}`,
+    b?.signed && "Signed: yes",
+    b && b.dustJacket != null && `Dust jacket: ${b.dustJacket ? "yes" : "no"}`,
+    b?.rarityNotes && `Edition notes: ${b.rarityNotes.slice(0, 400)}`,
+    item.description && `Description: ${item.description.replace(/\s+/g, " ").slice(0, 600)}`,
+    `Collectable features: ${features.filter((f) => f.major).map((f) => `${f.label} (${f.evidence})`).join("; ") || "none"}`,
+  ].filter(Boolean);
+  const list = comps.map((c, i) => {
+    const facts = [
+      COMP_SOURCE_LABELS[c.source],
+      formatMoney(c.price, currency),
+      c.soldAt && new Date(c.soldAt).toISOString().slice(0, 10),
+      c.condition,
+      c.size && `size ${c.size}`,
+    ].filter(Boolean);
+    return `${i + 1}. ${c.title.replace(/\s+/g, " ")} [${facts.join(", ")}]`;
+  });
+  return `The seller's item:\n${lines.join("\n")}\n\nComps:\n${list.join("\n")}`;
+}
+
+/** Turns raw model JSON into judgements by comp URL, skipping anything that doesn't check out. */
+export function normaliseReview(raw: unknown, comps: Comp[]): { judgements: Record<string, AiJudgement>; note: string } {
+  const out = ReviewOutput.safeParse(raw);
+  if (!out.success || typeof raw !== "object" || raw === null || !("comps" in raw)) {
+    throw new AiError("The AI returned an unexpected response. Try again.");
+  }
+  const judgements: Record<string, AiJudgement> = {};
+  for (const entry of out.data.comps) {
+    const e = ReviewEntry.safeParse(entry);
+    const comp = e.success ? comps[e.data.n - 1] : undefined;
+    if (!e.success || !comp || judgements[comp.url]) continue;
+    judgements[comp.url] = { judgement: e.data.judgement, reason: e.data.reason.trim().replace(/\.$/, "").slice(0, 80) };
+  }
+  return { judgements, note: out.data.note.trim().slice(0, 1200) };
+}
+
+/**
+ * Asks Gemini which comps are really the same item, and for collectables, what to check (PRICING.md §8).
+ * It only judges the comps: the price is still worked out by the rules from the comps' own prices.
+ */
+export async function reviewComps(
+  env: GeminiEnv,
+  item: ReviewedItem,
+  comps: Comp[],
+  images: ImageInput[] = [],
+  currency: Settings["currency"] = "GBP",
+): Promise<AiReview> {
+  if (!env.GEMINI_API_KEY) throw new AiError("AI isn't set up on this server (GEMINI_API_KEY is not set).");
+  const basis = aiReviewBasis(item);
+  const hasCollectable = specialFeatures(item).some((f) => f.major);
+  if (!comps.length && !hasCollectable) return { status: "done", at: Date.now(), basis, judgements: {}, note: "" };
+  const parts = imageParts(images, REVIEW_IMAGES, REVIEW_IMAGE_BYTES);
+  parts.push({ text: reviewPrompt(item, comps, currency) });
+  const raw = await generateJson(env, parts, {
+    systemInstruction: REVIEW_INSTRUCTION,
+    schema: REVIEW_SCHEMA,
+    empty: "The AI didn't return a review.",
+    slow: "Gemini took too long to review the comparables.",
+  });
+  return { status: "done", at: Date.now(), basis, ...normaliseReview(raw, comps) };
 }

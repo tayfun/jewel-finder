@@ -112,6 +112,8 @@ read without their shipping line.
   summary (json)`. Latest one per item is shown; older ones kept (a price history to come back to).
 - `POST /api/items/:id/price-check {queries, comps}` → stores comps, computes `priceSummary` on the
   server (one source of truth), returns the check. `GET /api/items/:id/price-check` → latest.
+- `ai` column (migration v8): the AI review (§8) as JSON. `POST /api/items/:id/price-check/review` reruns
+  it on the latest check.
 - Applying a price is the existing `PATCH /api/items/:id {price}`.
 
 ## 7. Flow
@@ -129,10 +131,23 @@ read without their shipping line.
 
 Deterministic rules decide the number; Gemini helps with judgement where text matching is weak:
 
-- **Relevance:** give it the item (and photos it already saw) plus comp titles; it marks each comp
-  same item / same edition / different. Applied only to the comps' verdicts, never inventing prices.
-- **Explaining collectables:** for flagged items with few comps, a short note on what drives value
-  (points of issue, first-state jackets) and what to check before pricing high.
+- **Relevance:** give it the item (details, detected features and up to 2 photos) plus the comps the
+  rules kept or nearly kept (at most 60: sold first, then by similarity; lots, parts and wrong sizes
+  aren't sent); it marks each comp **same** (like for like), **lesser** (same work, missing what makes
+  ours valuable: later printing, book club, facsimile, unsigned), **greater** (same work with something
+  ours lacks) or **different**. Applied only to the comps' verdicts, never inventing prices.
+- **Combining with the rules:** same → match, lesser → ordinary, greater/different → dropped, and the
+  stricter of the rule and AI verdicts wins, so the AI can't turn an ordinary copy into a match and push a
+  collectable's price up. One exception: a comp the rules dropped only for its title wording ("Different
+  item") is re-judged on the other rules when the AI says it's the same item. Objective drops (lots,
+  parts, size, format, no price) always stand. Unsure → "same", so the AI doesn't thin out good comps.
+- **Explaining collectables:** for items with major features, a short note on what drives value
+  (points of issue, first-state jackets) and what to check before pricing high. No prices.
+- **Staleness:** the review stores `aiReviewBasis(item)` (title, brand, size, book details). Its
+  judgements are applied only while the item still matches; otherwise the check says the review is
+  outdated and offers "Review again".
+- **Failures:** a Gemini error never fails the price check: the check is saved with a `failed` review
+  and its reason, priced by the rules alone.
 - Auto-fill already estimates rarity from photos; its flags feed §4.
 
 ## 9. Build order
@@ -143,9 +158,10 @@ Deterministic rules decide the number; Gemini helps with judgement where text ma
    orchestration, `PRICE_CHECK` bridge message. *(done: `apps/extension/src/lib/comps.ts`, `START_PRICE_CHECK`)*
 3. **API** — `price_checks` table, endpoints, tests. *(done: migration v7; the latest check is re-assessed
    against the item as it is now, so correcting the edition re-prices without searching again; last 5 kept)*
-4. **Web** — feature flags on the item page, price-check panel, apply price. *(done: `components/Pricing.tsx`;
-   still to do: side panel button)*
-5. **AI relevance + collectable notes** (§8).
+4. **Web** — feature flags on the item page, price-check panel, apply price. *(done: `components/Pricing.tsx`,
+   and **💷 Price** per item in the side panel, with the suggestions and **Use**)*
+5. **AI relevance + collectable notes** (§8). *(done: `reviewComps` in `apps/api/src/ai.ts`, run by the
+   Worker when a check is saved; migration v8 stores it on the check; `POST …/price-check/review` reruns it)*
 6. Later: bulk "price check everything without a price", repricing suggestions for stale listings
    (ties into relist), learning from the seller's own sales, specialist book sources.
 

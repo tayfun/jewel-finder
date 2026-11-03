@@ -59,6 +59,39 @@ export interface CompAssessment {
   reason: string;
   /** 0–1 title similarity to the item. */
   similarity: number;
+  /** What the AI review made of it, when there is a current one. */
+  ai?: CompJudgement;
+}
+
+/**
+ * The AI's view of one comp against the item (PRICING.md §8):
+ * - same: the same item, like for like (for books, the same edition and features);
+ * - lesser: the same work, but missing something that makes the seller's copy worth more
+ *   (a later printing, book club edition, unsigned, no jacket): an ordinary copy;
+ * - greater: the same work with something the seller's copy lacks (signed, first edition, limited);
+ * - different: not the same item at all.
+ */
+export type CompJudgement = "same" | "lesser" | "greater" | "different";
+export const COMP_JUDGEMENTS = ["same", "lesser", "greater", "different"] as const satisfies readonly CompJudgement[];
+
+export interface AiJudgement {
+  judgement: CompJudgement;
+  /** A few words on why. */
+  reason: string;
+}
+
+/** The AI's review of a price check's comps, stored with the check. */
+export interface AiReview {
+  status: "done" | "failed";
+  at: number;
+  /** aiReviewBasis(item) when it ran: judgements only apply while the item still matches it. */
+  basis: string;
+  /** By comp URL. Comps it wasn't shown keep their rule verdicts. */
+  judgements: Record<string, AiJudgement>;
+  /** For collectables: what drives the value and what to check before pricing high. */
+  note: string;
+  /** Why it failed (status "failed"). */
+  error?: string;
 }
 
 export type Confidence = "low" | "medium" | "high";
@@ -87,6 +120,8 @@ export interface PriceSummary {
   warnings: string[];
   /** One per comp, in the same order. */
   assessments: CompAssessment[];
+  /** How many verdicts the AI review changed (0 without a current review). */
+  aiChanged: number;
 }
 
 // --------------------------------------------------------------- features
@@ -230,7 +265,34 @@ const NOT_THE_THING = /\b(wanted|empty box|box only|dust jacket only|jacket only
 const MAJOR: FeatureKey[] = ["first_edition", "signed", "limited", "proof"];
 
 /** Is this comp the same kind of thing as the item, and like for like on what matters? */
-export function assessComp(item: PricedItem, comp: Comp, itemFeatures = specialFeatures(item)): CompAssessment {
+export function assessComp(item: PricedItem, comp: Comp, itemFeatures = specialFeatures(item), ai?: AiJudgement | null): CompAssessment {
+  let rules = assessByRules(item, comp, itemFeatures);
+  if (!ai) return rules;
+  const verdict = JUDGEMENT_VERDICT[ai.judgement];
+  // Titles word the same book or garment in many ways. When the AI is sure it's the same thing, judge
+  // it on the remaining rules instead of the title's wording.
+  if (rules.reason === DIFFERENT_ITEM && verdict !== "dropped") rules = assessByRules(item, comp, itemFeatures, true);
+  // The AI only ever makes a verdict stricter: it never turns an ordinary copy into a match, so it
+  // can't push a collectable's price up, and objective drops (lots, parts, sizes, formats) stand.
+  if (STRICTNESS[verdict] > STRICTNESS[rules.verdict]) {
+    return { ...rules, verdict, reason: `AI: ${ai.reason || JUDGEMENT_LABELS[ai.judgement]}`, ai: ai.judgement };
+  }
+  return { ...rules, ai: ai.judgement };
+}
+
+const STRICTNESS: Record<CompVerdict, number> = { match: 0, ordinary: 1, dropped: 2 };
+const JUDGEMENT_VERDICT: Record<CompJudgement, CompVerdict> = { same: "match", lesser: "ordinary", greater: "dropped", different: "dropped" };
+const JUDGEMENT_LABELS: Record<CompJudgement, string> = {
+  same: "same item",
+  lesser: "a lesser copy",
+  greater: "a better copy than yours",
+  different: "a different item",
+};
+
+const DIFFERENT_ITEM = "Different item";
+
+/** The deterministic verdict. `sameItem`: the AI vouched it's the same item, so skip the title test. */
+function assessByRules(item: PricedItem, comp: Comp, itemFeatures: Feature[], sameItem = false): CompAssessment {
   const title = norm(comp.title);
   const itemTitle = norm(item.title);
   const tokens = identityTokens([item.title, item.book?.author ?? ""].join(" "));
@@ -238,7 +300,7 @@ export function assessComp(item: PricedItem, comp: Comp, itemFeatures = specialF
   const drop = (reason: string): CompAssessment => ({ verdict: "dropped", reason, similarity });
 
   if (!(comp.price > 0)) return drop("No price");
-  if (!comp.exact && similarity < 0.5) return drop("Different item");
+  if (!comp.exact && !sameItem && similarity < 0.5) return drop(DIFFERENT_ITEM);
   if (LOT.test(title) && !LOT.test(itemTitle)) return drop("Lot or bundle");
   if (PARTS.test(title) && !PARTS.test(itemTitle)) return drop("For parts / faulty");
   if (NOT_THE_THING.test(title)) return drop("Not the item itself");
@@ -360,10 +422,14 @@ function suggest(
   return { marketplace, basis, price: nicePrice(price), low: nicePrice(low), high: nicePrice(Math.max(high, low)), count: comps.length, confidence, note };
 }
 
-/** Works out a suggested price per marketplace from comps, with verdicts and warnings. */
-export function priceSummary(item: PricedItem, comps: Comp[], now = Date.now()): PriceSummary {
+/**
+ * Works out a suggested price per marketplace from comps, with verdicts and warnings. `judgements`
+ * (by comp URL) come from a current AI review and refine the verdicts; the maths stays the same.
+ */
+export function priceSummary(item: PricedItem, comps: Comp[], now = Date.now(), judgements?: Record<string, AiJudgement>): PriceSummary {
   const features = specialFeatures(item);
-  const assessments = comps.map((c) => assessComp(item, c, features));
+  const assessments = comps.map((c) => assessComp(item, c, features, judgements?.[c.url]));
+  const aiChanged = judgements ? assessments.filter((a, i) => a.ai && a.verdict !== assessByRules(item, comps[i]!, features).verdict).length : 0;
   const pick = (verdict: CompVerdict, sources: CompSource[]) => comps.filter((c, i) => assessments[i]!.verdict === verdict && sources.includes(c.source));
 
   const suggestions: PriceSuggestion[] = [];
@@ -392,7 +458,43 @@ export function priceSummary(item: PricedItem, comps: Comp[], now = Date.now()):
   if (best && best.low > 0 && (best.high - best.low) / best.price > 0.8) warnings.push("Prices vary a lot: check the comparables before settling on one.");
   if (best?.basis === "listed") warnings.push("Nothing sold to go on, so this is from current asking prices, aimed at the cheaper end.");
   if (!comps.length) warnings.push("No comparable listings found. Try a shorter title, or check by hand.");
-  return { suggestions, features, ordinaryFloor, warnings, assessments };
+  return { suggestions, features, ordinaryFloor, warnings, assessments, aiChanged };
+}
+
+// ------------------------------------------------------------------ AI review
+
+/**
+ * What an AI review of the comps depends on: what the item is and the features that set its value.
+ * When the seller changes any of it, an old review no longer applies.
+ */
+export function aiReviewBasis(item: PricedItem): string {
+  const b = item.book;
+  return JSON.stringify([
+    item.title.trim().toLowerCase(),
+    item.brand.trim().toLowerCase(),
+    item.size.trim().toLowerCase(),
+    b ? [b.author, b.isbn, b.edition, b.printing, b.format, b.signed, b.dustJacket, b.yearPublished, b.publisher] : null,
+  ]);
+}
+
+/** The judgements to price with: only from a review that ran on the item as it is now. */
+export function currentJudgements(item: PricedItem, review: AiReview | null | undefined): Record<string, AiJudgement> | undefined {
+  return review?.status === "done" && review.basis === aiReviewBasis(item) ? review.judgements : undefined;
+}
+
+/**
+ * The comps worth showing the AI, most useful first: the ones the rules kept, then near misses on the
+ * title. Objective drops (lots, parts, sizes…) and clearly different items aren't worth its time.
+ */
+export function compsForReview(item: PricedItem, comps: Comp[], limit = 60): Comp[] {
+  const features = specialFeatures(item);
+  const order: Record<CompSource, number> = { ebay_sold: 0, ebay_listed: 1, vinted_listed: 2 };
+  return comps
+    .map((comp) => ({ comp, a: assessByRules(item, comp, features) }))
+    .filter(({ a }) => a.verdict !== "dropped" || (a.reason === DIFFERENT_ITEM && a.similarity >= 0.25))
+    .sort((x, y) => STRICTNESS[x.a.verdict] - STRICTNESS[y.a.verdict] || order[x.comp.source] - order[y.comp.source] || y.a.similarity - x.a.similarity)
+    .slice(0, limit)
+    .map(({ comp }) => comp);
 }
 
 // --------------------------------------------------------------- searching
@@ -417,5 +519,9 @@ export interface PriceCheck {
   comps: Comp[];
   /** Searches that couldn't be read (blocked, changed markup…). */
   problems: string[];
+  /** Gemini's review of the comps, when AI is set up on the server. */
+  ai: AiReview | null;
+  /** The AI review exists but the item has changed since: its judgements aren't applied. */
+  aiOutdated: boolean;
   summary: PriceSummary;
 }
