@@ -1,7 +1,8 @@
 # Jewel Finder
 
 Inventory for eBay / Vinted resellers, with a Chrome extension that fills in the marketplaces'
-own listing forms. See [PLAN.md](PLAN.md) for the architecture and roadmap.
+own listing forms, ends listings elsewhere when something sells, and imports the listings you already
+have. See [PLAN.md](PLAN.md) for the architecture, API and roadmap.
 
 ```
 apps/api        Cloudflare Worker (Hono) + AccountDO Durable Object (SQLite) + R2 photos; also serves the web app
@@ -34,35 +35,83 @@ Load the folder via **chrome://extensions → Developer mode → Load unpacked**
 toolbar icon to open the side panel. Use `pnpm --filter @jf/extension watch` while developing it
 (reload the extension after background changes).
 
-Listing flow: pick an item (side panel, or "List on Vinted/eBay" in the web app) → the extension opens
-the marketplace's sell page and fills photos, title, description, price and whatever else it can →
-you finish the remaining fields shown in the on-page panel and press the marketplace's own button →
-the extension records the listing URL back in your inventory.
+## Features
 
-Cross-delisting: mark an item sold ("Sold on Vinted/eBay/elsewhere") → its other live listings become
-"Needs ending" and the extension opens each one → it gets the delete/end step ready (Vinted: Delete;
-eBay: End listing with a reason) and you confirm → once the listing is gone it's marked ended.
+### Listing
 
-Importing: "Import listings" in the web app (or "Import listings: ⬇ Vinted / ⬇ eBay" in the side panel)
-puts a marketplace tab into import mode and opens your listings there (Vinted: your wardrobe, reached
-via "Open my wardrobe" from the home page; eBay: Seller Hub → Active). A panel on the page lists every
-listing it finds, with a checkbox each and "Select all on this page"; ones already in your inventory
-are marked and skipped. Import mode stays on as you scroll or page through. For each pick the extension
-fetches the listing page and reads title, description, price, brand, size, colour, condition, category
-and photos (JSON-LD and meta tags first, then the page's markup; eBay's description comes from its
-`ebaydesc.com` frame). The background copies the photos into R2 and `POST /api/items/import` creates the
-item with a `listed` (or `sold`/`ended`) listing, de-duplicated on the marketplace's listing id.
+Pick an item (side panel, or "List on Vinted/eBay" in the web app) → the extension opens the
+marketplace's sell page and fills photos, title, description, price and whatever else it can → you
+finish the remaining fields shown in the on-page panel and press the marketplace's own button → the
+extension records the listing URL back in your inventory.
 
-Duplicates: items that look like the same thing entered twice (typically imported from both Vinted and
-eBay) are flagged on the inventory page, on the item page and in the import panel, and reviewed at
-`/duplicates`. "Keep this one" merges the pair: the kept item keeps its details and photos, fills blanks
-from the other, combines tags and takes over its listings; if either had sold, the merged item is sold and
-its other live listings need ending. "Not duplicates" is remembered. The scoring (title words, ISBN,
-brand, size, author, price, which marketplaces each is live on) is in `packages/shared/src/duplicates.ts`.
+### Cross-delisting
 
-The marketplace selectors live in `apps/extension/src/content/{vinted,ebay}.ts` (import readers: `vintedImporter` /
-`ebayImporter`; shared page-reading helpers in `src/lib/scrape.ts`). Marketplaces change their DOM
-regularly — that's the first place to look when a field stops filling or an import comes in thin.
+Mark an item sold ("Sold on Vinted/eBay/elsewhere") → its other live listings become "Needs ending" and
+the extension opens each one → it gets the delete/end step ready (Vinted: Delete; eBay: End listing with
+a reason) and you confirm → once the listing is gone it's marked ended.
+
+### Importing existing listings
+
+Brings the listings you already have on Vinted and eBay into your inventory, picked one by one or a
+whole page at a time. Sign in to the marketplace in the same browser first.
+
+1. **Start:** "Import listings" in the web app (`/import`, also on the Inventory page), or
+   "Import listings: ⬇ Vinted / ⬇ eBay" in the side panel. The side panel uses the current tab if it's
+   already on that marketplace; otherwise a new tab opens on your listings: eBay Seller Hub → Active,
+   or Vinted's home page, where the panel offers "Open my wardrobe" (Vinted's wardrobe URL needs your
+   member id).
+2. **Pick:** a Jewel Finder panel on the page lists every listing found there, with a checkbox each and
+   **Select all on this page**. Hovering a row outlines that listing on the page. Listings already in your
+   inventory (imported before, or listed from Jewel Finder) show "✓ In Jewel Finder" and can't be picked.
+   Import mode stays on in that tab while you scroll or page through. The panel warns when the page
+   doesn't look like your own listings (eBay: only Seller Hub / My eBay count).
+3. **Import:** listings are read one at a time, 600 ms apart. Keep the tab open until it finishes;
+   "Stop" ends it after the current one. The summary lists what failed and why, which items came in
+   without photos, and which look like items you already have (see Duplicates).
+
+Each import becomes an item with title, description, price, brand, size, colour, condition, category
+and up to 20 photos, plus a listing linked to the marketplace URL. Live listings come in as in-stock
+items with a `listed` listing; sold ones as sold items; ended eBay listings as in-stock items with an
+ended listing. Photos that can't be downloaded are skipped and the item is still created.
+
+How it works: the content script fetches each listing page with your marketplace session and reads it
+with `DOMParser` (JSON-LD and meta tags first, then the page's markup). eBay descriptions live on
+`*.ebaydesc.com`, so the background fetches those. The background downloads photos from the CDNs
+(`*.vinted.net`, `i.ebayimg.com`), uploads them to R2, and calls `POST /api/items/import`, which skips
+any listing whose marketplace id is already in the inventory. Those three hosts are extra host
+permissions, so Chrome asks existing users to approve them when the extension updates.
+
+Readers: `vintedImporter` / `ebayImporter` in `apps/extension/src/content/{vinted,ebay}.ts`, shared
+helpers in `src/lib/scrape.ts`, the panel in `src/lib/importer.ts`. They're tested against
+approximations of the marketplaces' pages, not saved real pages yet (PLAN.md, "Next up").
+
+### Duplicates
+
+Flags items that look like the same thing entered twice, typically one imported from Vinted and one
+from eBay. They're counted on the Inventory page, noted on each item's page and in the import panel's
+summary, and reviewed side by side at `/duplicates`.
+
+- **Keep this one** merges the pair. The kept item keeps its own details and photos (it takes the
+  other's photos only if it has none), fills its blank fields from the other, combines tags and takes
+  over the other's listings; the other item is deleted. If either had sold, the merged item is sold and
+  its other live listings become "Needs ending". A merge is refused when both items have a live listing
+  on the same marketplace.
+- **Not duplicates** is remembered, so the pair isn't suggested again. Copies made with "Duplicate"
+  (restocking) are never flagged.
+
+Scoring is in `packages/shared/src/duplicates.ts`. Title similarity is the base: mostly how many of the
+shorter title's words the longer one contains, since eBay titles add keywords. A shared ISBN counts as a
+strong match. Matching brand, size, author and price add to the score, as does being live on different
+marketplaces. A different ISBN, author, brand or size rules a pair out ("S" ≠ "XS", but "W32" matches
+"W32 L30"); so do both being live on the same marketplace, both being sold, or either being archived.
+Pairs scoring at least `DUPLICATE_THRESHOLD` (0.8) are shown. Photos aren't compared, because each
+marketplace re-compresses them.
+
+### Where to look when a marketplace changes
+
+The listing-form selectors and the import readers live in `apps/extension/src/content/{vinted,ebay}.ts`.
+Marketplaces change their DOM regularly, so that's the first place to look when a field stops filling or
+an import comes in thin.
 
 ### AI auto-fill
 
@@ -72,7 +121,7 @@ You review and tick what to apply. Put a key from https://aistudio.google.com/ap
 `apps/api/.dev.vars` as `GEMINI_API_KEY=...` (the model is `GEMINI_MODEL` in `wrangler.jsonc`; when it is overloaded the Worker falls back to `GEMINI_FALLBACK_MODEL`).
 The prompt and response schema live in `apps/api/src/ai.ts`.
 
-### Error monitoring (Sentry)
+## Error monitoring (Sentry)
 
 The API (Worker + Durable Object) and the web app report errors and performance traces to Sentry.
 Both are off until a DSN is set, so local dev sends nothing by default.
