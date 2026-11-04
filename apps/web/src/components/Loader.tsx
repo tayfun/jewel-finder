@@ -46,8 +46,8 @@ export function Loader({ label = "Loading…", full = false }: { label?: string;
     <div className={`loader ${full ? "loader-full" : ""}`} role="status" aria-live="polite">
       <div className="loader-track" aria-hidden="true">
         {Object.entries(ICONS).map(([name, icon], i) => (
-          <span key={name} className="loader-item" style={{ animationDelay: `${-i * 1.1}s` }}>
-            <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <span key={name} className="loader-item" style={{ animationDelay: `${-i * 1.2}s` }}>
+            <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               {icon}
             </svg>
           </span>

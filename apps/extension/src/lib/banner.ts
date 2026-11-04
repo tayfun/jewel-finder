@@ -9,34 +9,45 @@ export type BannerState =
 
 const CSS = `
   :host { all: initial; }
-  .box { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; width: 340px; max-height: 70vh; overflow: auto;
-    font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: #16191d; background: #fff;
-    border: 1px solid #e2e5e9; border-radius: 12px; box-shadow: 0 10px 30px rgb(0 0 0 / 18%); }
-  header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #0f766e; color: #fff;
-    border-radius: 12px 12px 0 0; font-weight: 600; cursor: move; user-select: none; touch-action: none; }
-  .dragging { opacity: .92; box-shadow: 0 16px 40px rgb(0 0 0 / 28%); }
+  .box { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; width: 380px; max-width: calc(100vw - 32px); max-height: 75vh; overflow: auto;
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #14181a; background: #fff;
+    border: 1px solid #e0e4df; border-radius: 14px; box-shadow: 0 4px 10px rgb(20 30 28 / 8%), 0 18px 44px rgb(20 30 28 / 18%);
+    -webkit-font-smoothing: antialiased; }
+  header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 11px 14px;
+    background: linear-gradient(135deg, #0b7a6c, #08574d); color: #fff;
+    border-radius: 14px 14px 0 0; font-weight: 650; font-size: 14.5px; cursor: move; user-select: none; touch-action: none; }
+  .dragging { opacity: .94; box-shadow: 0 20px 50px rgb(0 0 0 / 30%); }
   header .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  header button { all: unset; cursor: pointer; padding: 0 4px; font-size: 16px; opacity: .85; }
-  .body { padding: 10px 12px; }
-  .msg { margin: 0 0 6px; }
-  h4 { margin: 10px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #69707a; }
-  ul { margin: 0; padding: 0; list-style: none; }
-  li { padding: 2px 0; display: flex; gap: 6px; }
-  .ok::before { content: "✓"; color: #0f766e; font-weight: 700; }
-  .todo::before { content: "•"; color: #b54708; font-weight: 700; }
+  header button { all: unset; cursor: pointer; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; font-size: 17px; opacity: .85; }
+  header button:hover { opacity: 1; background: rgb(255 255 255 / 16%); }
+  .body { padding: 12px 14px 14px; }
+  .msg { margin: 0 0 4px; color: #2d3533; }
+  h4 { margin: 14px 0 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4f5a58; }
+  ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+  li { padding: 4px 0; display: flex; gap: 8px; align-items: baseline; line-height: 1.4; }
+  li > span { min-width: 0; overflow-wrap: anywhere; }
+  .ok::before { content: "✓"; flex: none; color: #0b7a6c; font-weight: 800; }
+  .todo::before { content: "•"; flex: none; color: #b54708; font-weight: 800; }
   .warn { color: #b42318; }
-  .guess { color: #b42318; }
-  .guess::before { content: "⚠"; font-weight: 700; }
-  .guess .why { color: #b42318; opacity: .8; font-size: 12px; }
+  /* Guesses and defaults: red, in their own tinted block, so they get checked. */
   h4.guess-h { color: #b42318; }
-  .val { color: #69707a; }
-  .copy { all: unset; cursor: pointer; color: #0f766e; margin-left: auto; font-size: 12px; }
-  .footer { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-top: 1px solid #e2e5e9; }
-  .footer button { all: unset; cursor: pointer; color: #69707a; font-size: 12px; }
+  h4.guess-h + ul { padding: 6px 10px; background: #fdecea; border: 1px solid #f6c7c0; border-radius: 10px; }
+  .guess { color: #b42318; }
+  .guess::before { content: "⚠"; flex: none; font-weight: 700; }
+  .guess b { font-weight: 700; }
+  .guess .why { color: #b42318; opacity: .85; font-size: 12.5px; }
+  .val { color: #4f5a58; }
+  .copy { all: unset; flex: none; cursor: pointer; margin-left: auto; padding: 1px 9px; border-radius: 99px; font-size: 12px; font-weight: 600;
+    color: #0b7a6c; background: #dcf5ef; }
+  .copy:hover { background: #c6eee4; }
+  .footer { display: flex; justify-content: space-between; align-items: center; padding: 9px 14px; border-top: 1px solid #e0e4df; background: #f7f8f6;
+    border-radius: 0 0 14px 14px; }
+  .footer button { all: unset; cursor: pointer; color: #4f5a58; font-size: 12.5px; font-weight: 500; }
   .footer button:hover { color: #b42318; }
-  .error header { background: #b42318; }
-  .done header { background: #067647; }
+  .error header { background: linear-gradient(135deg, #c0331f, #92210f); }
+  .done header { background: linear-gradient(135deg, #067647, #05573a); }
   .min .body, .min .footer { display: none; }
+  .min header { border-radius: 14px; }
 `;
 
 let host: HTMLElement | null = null;
