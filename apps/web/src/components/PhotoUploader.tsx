@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 
 const MAX_EDGE = 2000;
@@ -22,12 +22,16 @@ async function shrink(file: File): Promise<Blob> {
 export function PhotoUploader({
   value,
   onChange,
+  onBusyChange,
 }: {
   value: string[];
   onChange(update: (keys: string[]) => string[]): void;
+  /** Told how many photos are still uploading, e.g. to hold back "auto-fill" until they're all in. */
+  onBusyChange?(uploading: number): void;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(0);
+  useEffect(() => onBusyChange?.(uploading), [uploading, onBusyChange]);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
 

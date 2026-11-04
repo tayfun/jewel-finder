@@ -10,6 +10,10 @@ const PNG = Uint8Array.from(
 );
 
 const modelOutput = {
+  itemType: "book",
+  brand: "",
+  size: "",
+  colour: "",
   title: "Harry Potter and the Philosopher's Stone J.K. Rowling 1st Edition 1997 Hardback",
   description: "First edition hardback.\n\nLight wear to corners.",
   condition: "good",
@@ -168,6 +172,24 @@ describe("describeGeminiError", () => {
 });
 
 describe("normaliseSuggestion", () => {
+  it("keeps brand, size and colour for other things, and clears book details that don't apply", () => {
+    const s = normaliseSuggestion({
+      ...modelOutput,
+      itemType: "clothing",
+      title: "Levi's 501 Straight Jeans Mens W32 L30 Mid Blue Denim",
+      brand: " Levi's ",
+      size: "W32 L30",
+      colour: "Mid blue",
+      book: { ...modelOutput.book, author: "should go" },
+    });
+    expect(s).toMatchObject({ itemType: "clothing", brand: "Levi's", size: "W32 L30", colour: "Mid blue" });
+    expect(s.book.author).toBe("");
+  });
+
+  it("treats an unknown item type as other", () => {
+    expect(normaliseSuggestion({ ...modelOutput, itemType: "spaceship" }).itemType).toBe("other");
+  });
+
   it("drops invalid values instead of failing", () => {
     const s = normaliseSuggestion({
       ...modelOutput,

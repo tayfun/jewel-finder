@@ -18,3 +18,17 @@ export const RARITIES = ["common", "uncommon", "scarce", "rare", "very_rare"] as
 
 /** Postage size of the packed item. Mapped to each marketplace's own bands (with the weight) at fill time. */
 export const PACKAGE_SIZES = ["large_letter", "small", "medium", "large"] as const;
+
+/** What kind of thing an item is, as the AI auto-fill reports it. Only "book" changes the form (book fields). */
+export const ITEM_TYPES = ["book", "clothing", "shoes", "accessories", "electronics", "media", "toys_games", "home", "other"] as const;
+export const ITEM_TYPE_LABELS: Record<(typeof ITEM_TYPES)[number], string> = {
+  book: "Book",
+  clothing: "Clothing",
+  shoes: "Shoes",
+  accessories: "Bags & accessories",
+  electronics: "Electronics",
+  media: "Music, films & games",
+  toys_games: "Toys",
+  home: "Home & garden",
+  other: "Something else",
+};

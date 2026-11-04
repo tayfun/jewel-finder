@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { BOOK_FIELDS, EMPTY_BOOK, bookOrNull } from "../book";
 
-type ItemKey = "title" | "description" | "condition" | "category" | "tags" | "packageSize" | "weightGrams";
+type ItemKey = "title" | "description" | "brand" | "size" | "colour" | "condition" | "category" | "tags" | "packageSize" | "weightGrams";
 
 interface Row {
   id: string;
@@ -25,6 +25,9 @@ function buildRows(item: ItemWithListings, s: AutofillSuggestion): Row[] {
   const top: { key: ItemKey; label: string; current: string; suggested: string; value: unknown }[] = [
     { key: "title", label: "Title", current: item.title, suggested: s.title, value: s.title },
     { key: "description", label: "Description", current: item.description, suggested: s.description, value: s.description },
+    { key: "brand", label: "Brand", current: item.brand, suggested: s.brand, value: s.brand },
+    { key: "size", label: "Size", current: item.size, suggested: s.size, value: s.size },
+    { key: "colour", label: "Colour", current: item.colour, suggested: s.colour, value: s.colour },
     {
       key: "condition",
       label: "Condition",
@@ -135,7 +138,7 @@ export function Autofill({
 
       {(state.kind === "idle" || state.kind === "loading") && (
         <p className="muted">
-          <span className="spinner" /> Reading your photos and identifying the book… this usually takes 5–20 seconds.
+          <span className="spinner" /> Reading your photos and identifying the item… this usually takes 5–20 seconds.
         </p>
       )}
 

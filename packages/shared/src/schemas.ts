@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BOOK_FORMATS, CONDITIONS, ITEM_STATUSES, LISTING_STATUSES, MARKETPLACES, PACKAGE_SIZES, RARITIES } from "./constants";
+import { BOOK_FORMATS, CONDITIONS, ITEM_STATUSES, ITEM_TYPES, LISTING_STATUSES, MARKETPLACES, PACKAGE_SIZES, RARITIES } from "./constants";
 
 export const Marketplace = z.enum(MARKETPLACES);
 export type Marketplace = z.infer<typeof Marketplace>;
@@ -247,9 +247,14 @@ export interface ApiError {
 
 /** What the AI suggests for an item, from its photos. Nothing is saved until the user applies it. */
 export interface AutofillSuggestion {
+  /** What kind of thing it is; book fields only apply to "book". */
+  itemType: (typeof ITEM_TYPES)[number];
   /** Marketplace-ready listing title (≤ 80 chars, fits eBay). */
   title: string;
   description: string;
+  brand: string;
+  size: string;
+  colour: string;
   condition: Condition | null;
   category: string;
   tags: string[];
@@ -257,7 +262,7 @@ export interface AutofillSuggestion {
   packageSize: PackageSize | null;
   /** Estimated packed weight in grams. */
   weightGrams: number | null;
-  /** 0–1: how sure the model is that it identified the right book/edition. */
+  /** 0–1: how sure the model is that it identified the right item (for books, the right edition). */
   confidence: number;
   /** Caveats from the model, e.g. "copyright page not shown; edition unverified". */
   notes: string;

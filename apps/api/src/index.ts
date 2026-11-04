@@ -412,6 +412,24 @@ app.post("/api/items/:id/autofill", async (c) => {
   }
 });
 
+// The same, for photos that aren't on an item yet: "add item" starts with photos, then auto-fills.
+app.post("/api/autofill", async (c) => {
+  if (!c.env.GEMINI_API_KEY) throw new HTTPException(503, { message: "AI auto-fill isn't set up on this server yet" });
+  const input = parse(
+    z.object({ images: z.array(z.string().max(200)).min(1, "Add at least one photo first").max(20), notes: z.string().max(2000).optional() }),
+    await body(c),
+  );
+  assertOwnImages(c.var.userId, input.images);
+  const images = await itemImages(c.env, input.images);
+  try {
+    const suggestion = await suggestListing(c.env, images, { title: "", description: "", notes: input.notes ?? "" });
+    return c.json<{ suggestion: AutofillSuggestion }>({ suggestion });
+  } catch (e) {
+    if (e instanceof AiError) throw new HTTPException(502, { message: e.message });
+    throw e;
+  }
+});
+
 app.get("/api/listings", async (c) => {
   const marketplace = parse(Marketplace, c.req.query("marketplace"));
   return c.json({ listings: await c.var.account.listListings(marketplace) });

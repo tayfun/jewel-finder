@@ -4,6 +4,7 @@ import {
   BOOK_FORMATS,
   BookDetails,
   COMP_JUDGEMENTS,
+  ITEM_TYPES,
   COMP_SOURCE_LABELS,
   CONDITIONS,
   CONDITION_LABELS,
@@ -33,24 +34,29 @@ export interface ImageInput {
   bytes: Uint8Array;
 }
 
-const SYSTEM_INSTRUCTION = `You are an expert antiquarian and second-hand bookseller who writes listings for eBay and Vinted.
-You are given photos of one book (typically cover, spine, title page, copyright page, and any flaws).
+const SYSTEM_INSTRUCTION = `You are an expert second-hand reseller who writes listings for eBay and Vinted: books (you know antiquarian and collectable books well), clothes and shoes, bags and accessories, electronics, records, films and games, toys, and homeware.
+You are given photos of one item: typically the front, back, labels and tags, and close-ups of details and flaws.
 
-Identify the book and edition as precisely as the photos allow:
+First decide what kind of item it is (itemType). Then identify it as precisely as the photos allow:
+- Read every label, tag, barcode, model or serial number and printed detail you can see. Take the brand, size and colour from them (for clothes and shoes, the size as printed, e.g. "UK 10", "M", "W32 L30").
+- Grade condition from what you can see: wear, marks, tears, stains, fading, missing parts. Never claim tags are attached unless you can see them.
+
+For books (itemType "book"), also fill in the book details:
 - Read the copyright page: edition statements, printing/number lines ("10 9 8 7 6 5 4 3 2 1"), impression notes, publisher, year.
 - Only give an ISBN that is printed and legible in a photo, or that you are certain belongs to this exact edition. Otherwise return an empty string. Never invent one.
 - Only state "First edition" / "First printing" when the photos show evidence for it; explain the evidence in rarityNotes.
 - Rarity is about how hard this specific edition and copy is to find (first editions, signed copies, limited runs, early printings of famous titles are scarcer).
-- Grade condition from what you can see: dust jacket, spine, corners, foxing, tears, writing, stickers.
+- Check the dust jacket, spine, corners, foxing, writing and stickers when grading.
+For anything that isn't a book, leave every book field empty (empty strings, null, false).
 
 Estimate postage for UK sellers, for the item once wrapped and packed:
-- weightGrams: the packed weight. Judge the item's size and page count from the photos; a typical paperback novel is 200-350 g, a hardback 500-900 g, a large illustrated book 1-2 kg. Add about 50 g for packaging.
-- packageSize: "large_letter" only if it packs to at most 35 x 25 x 2.5 cm and 1 kg (thin paperbacks); "small" up to 45 x 35 x 16 cm and 2 kg (most books); "medium" up to 61 x 46 x 46 cm; "large" for anything bigger.
+- weightGrams: the packed weight, judged from the item's size and material, plus about 50 g of packaging. A paperback novel is 200-350 g, a hardback 500-900 g, a T-shirt 150-250 g, jeans 500-700 g, trainers in a box 1-1.5 kg.
+- packageSize: "large_letter" only if it packs to at most 35 x 25 x 2.5 cm and 1 kg; "small" up to 45 x 35 x 16 cm and 2 kg; "medium" up to 61 x 46 x 46 cm; "large" for anything bigger.
 
 Write the listing:
-- title: at most 80 characters, keyword-rich for marketplace search, e.g. "Harry Potter and the Philosopher's Stone J.K. Rowling 1st Edition 1997 Hardback".
-- description: honest, plain text, a few short paragraphs: what it is, edition/printing details, condition and any flaws seen. No emojis, no made-up claims.
-- Use empty strings, null or false when something is unknown. Say what you couldn't verify in notes.`;
+- title: at most 80 characters, keyword-rich for marketplace search: brand, item, model, size, colour, key details, e.g. "Levi's 501 Straight Jeans Mens W32 L30 Mid Blue Denim" or "Harry Potter and the Philosopher's Stone J.K. Rowling 1st Edition 1997 Hardback".
+- description: honest, plain text, a few short paragraphs: what it is, the details that matter to a buyer, condition and any flaws seen. No emojis, no made-up claims.
+- Use empty strings, null or false when something is unknown. Say what you couldn't verify, or which photo would help, in notes.`;
 
 const str = (description: string) => ({ type: "string", description });
 const nullable = (schema: object) => ({ anyOf: [schema, { type: "null" }] });
@@ -59,10 +65,14 @@ const nullable = (schema: object) => ({ anyOf: [schema, { type: "null" }] });
 export const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
+    itemType: { type: "string", enum: [...ITEM_TYPES], description: "What kind of item this is." },
     title: str("Marketplace listing title, at most 80 characters."),
     description: str("Listing description in plain text."),
+    brand: str("Brand or maker as printed on the item or its labels; for books leave empty (the publisher goes in book)."),
+    size: str('Size as printed, e.g. "UK 10", "M", "W32 L30"; empty when it has none.'),
+    colour: str("Main colour(s), e.g. \"Navy\" or \"Black/white\"; empty for books."),
     condition: nullable({ type: "string", enum: [...CONDITIONS], description: "Overall condition grade." }),
-    category: str('Marketplace category path, e.g. "Books > Fiction > Fantasy".'),
+    category: str('Marketplace category path, e.g. "Books > Fiction > Fantasy" or "Men > Jeans".'),
     tags: { type: "array", items: { type: "string" }, maxItems: 10, description: "Search keywords." },
     book: {
       type: "object",
@@ -100,13 +110,32 @@ export const RESPONSE_SCHEMA = {
     confidence: { type: "number", minimum: 0, maximum: 1, description: "Confidence in the identification, 0-1." },
     notes: str("What could not be verified from the photos, if anything."),
   },
-  required: ["title", "description", "condition", "category", "tags", "book", "packageSize", "weightGrams", "confidence", "notes"],
+  required: [
+    "itemType",
+    "title",
+    "description",
+    "brand",
+    "size",
+    "colour",
+    "condition",
+    "category",
+    "tags",
+    "book",
+    "packageSize",
+    "weightGrams",
+    "confidence",
+    "notes",
+  ],
 } as const;
 
 /** Lenient parse of the model's JSON: schema-shaped, but never trust it blindly. */
 const ModelOutput = z.object({
+  itemType: z.enum(ITEM_TYPES).catch("other"),
   title: z.string(),
   description: z.string(),
+  brand: z.string().catch(""),
+  size: z.string().catch(""),
+  colour: z.string().catch(""),
   condition: Condition.nullable().catch(null),
   category: z.string().catch(""),
   tags: z.array(z.string()).catch([]),
@@ -178,13 +207,19 @@ export function normaliseSuggestion(raw: unknown): AutofillSuggestion {
     book.isbn = "";
   }
 
+  const isBook = out.data.itemType === "book";
   return {
+    itemType: out.data.itemType,
     title: out.data.title.trim().slice(0, 80),
     description: out.data.description.trim().slice(0, 5000),
+    brand: isBook ? "" : out.data.brand.trim().slice(0, 80),
+    size: isBook ? "" : out.data.size.trim().slice(0, 40),
+    colour: isBook ? "" : out.data.colour.trim().slice(0, 40),
     condition: out.data.condition,
     category: out.data.category.trim().slice(0, 120),
     tags: [...new Set(out.data.tags.map((t) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 10).map((t) => t.slice(0, 40)),
-    book,
+    // Book details only make sense for books, whatever the model put there.
+    book: isBook ? book : BookDetails.parse({}),
     packageSize: out.data.packageSize,
     weightGrams: out.data.weightGrams,
     confidence: Math.min(1, Math.max(0, out.data.confidence)),
@@ -192,7 +227,7 @@ export function normaliseSuggestion(raw: unknown): AutofillSuggestion {
   };
 }
 
-/** Asks Gemini to identify the book in the photos and draft listing data for it. */
+/** Asks Gemini to identify the item in the photos (book or anything else) and draft listing data for it. */
 export async function suggestListing(
   env: GeminiEnv,
   images: ImageInput[],
@@ -209,7 +244,7 @@ export async function suggestListing(
     item.notes && `Seller's private notes: ${item.notes}`,
   ].filter(Boolean);
   parts.push({
-    text: `Identify this book and draft its listing.${known.length ? `\n\nWhat the seller already wrote (may be incomplete or wrong; prefer the photos):\n${known.join("\n")}` : ""}`,
+    text: `Identify this item and draft its listing.${known.length ? `\n\nWhat the seller already wrote (may be incomplete or wrong; prefer the photos):\n${known.join("\n")}` : ""}`,
   });
 
   return normaliseSuggestion(

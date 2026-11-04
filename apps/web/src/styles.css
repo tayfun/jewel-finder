@@ -530,11 +530,17 @@ label.checkbox input { width: 1rem; }
   .autofill-table td.muted { display: none; }
   .autofill-table td.prewrap:last-child { grid-column: 2; }
 }
-@media (max-width: 440px) {
-  /* Logo only, so the nav fits on one line. */
-  .topbar .brand { font-size: 0; gap: 0; }
-  .topbar nav { gap: 0; }
-  .topbar nav a { font-size: 0.85rem; }
+/* Phones and small tablets: logo and the theme button on top, the links on a second row that scrolls
+   sideways, so nothing runs off the screen. */
+@media (max-width: 760px) {
+  .topbar { flex-wrap: wrap; row-gap: 0.35rem; }
+  .topbar-end { margin-left: auto; }
+  .topbar nav {
+    order: 3; flex: 1 0 100%; gap: 0.15rem; overflow-x: auto; overscroll-behavior-x: contain;
+    margin: 0 -1rem; padding: 0 1rem 0.15rem; scrollbar-width: none; scroll-snap-type: x proximity;
+  }
+  .topbar nav::-webkit-scrollbar { display: none; }
+  .topbar nav a { scroll-snap-align: start; font-size: 0.9rem; padding: 0.4rem 0.7rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -1016,3 +1022,54 @@ label.checkbox-row { flex-direction: row; align-items: center; gap: 0.45rem; mar
 .chapter-foot .coral { color: var(--brand-coral); }
 .chapter-foot .teal { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .spin, .mode-app .mini-floor, .confetti-bit { animation: none; } }
+
+/* ==========================================================================
+   Add item: photo wizard, stepper, AI auto-fill states
+   ========================================================================== */
+.stepper { list-style: none; display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; margin: 0.6rem 0 0; padding: 0; font-size: 0.9rem; font-weight: 650; color: var(--muted); }
+.stepper li { display: flex; align-items: center; gap: 0.45rem; }
+.stepper li span { display: grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; font-size: 0.8rem; font-weight: 800; background: var(--surface-2); border: 1px solid var(--border-strong); }
+.stepper li.on { color: var(--text); }
+.stepper li.on span { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.stepper li.done span { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+
+.wizard { max-width: 880px; display: grid; gap: 0; }
+.wizard-intro { display: grid; gap: 1.1rem; }
+.wizard-intro h2 { font-size: 1.35rem; margin-bottom: 0.4rem; }
+.wizard-intro p { margin: 0; max-width: 62ch; }
+.shot-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 0.7rem; }
+.shot-list li { display: flex; gap: 0.7rem; align-items: flex-start; padding: 0.75rem 0.85rem; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
+.shot-list li strong { display: block; font-size: 0.95rem; }
+.shot-list li .small { display: block; line-height: 1.4; }
+.shot-icon { flex: none; display: grid; place-items: center; width: 2.2rem; height: 2.2rem; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-size: 1.1rem; }
+.wizard-photos-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; }
+.wizard-photos-head h2 { margin: 0; }
+.photo-meter { display: flex; align-items: center; gap: 0.8rem; margin-top: 1rem; padding: 0.65rem 0.85rem; border-radius: 12px; background: var(--surface-2); font-size: 0.92rem; font-weight: 600; }
+.meter-bars { display: flex; gap: 4px; }
+.meter-bars span { width: 26px; height: 8px; border-radius: 4px; background: var(--border-strong); transition: background 0.3s; }
+.photo-meter.level-1 .meter-bars span.on { background: var(--brand-amber); }
+.photo-meter.level-2 .meter-bars span.on { background: var(--brand-violet); }
+.photo-meter.level-3 .meter-bars span.on { background: var(--accent); }
+.wizard-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 1rem; margin-top: 0.4rem; }
+.wizard-actions .cta:disabled { background: var(--surface-2); color: var(--muted); box-shadow: none; }
+
+.ai-status { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.ai-status.loading { padding-block: 0.5rem 1rem; }
+.ai-status.loading .loader { padding-block: 1rem 0.4rem; }
+.ai-status.error { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.ai-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 0.9rem; margin-bottom: 0.4rem; }
+.ai-badge { font-weight: 800; color: var(--accent); }
+.ai-summary .confidence { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; color: var(--muted); }
+/* A field the AI filled in, until the seller edits it. */
+label.ai-filled { position: relative; }
+label.ai-filled::after { content: "✨"; position: absolute; top: -2px; right: 0; font-size: 0.85rem; }
+label.ai-filled input, label.ai-filled select, label.ai-filled textarea { border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong)); background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface)); }
+/* While the AI reads the photos, empty fields shimmer to show something's on its way. */
+.ai-waiting input:not([type=checkbox]), .ai-waiting textarea, .ai-waiting select {
+  background: linear-gradient(90deg, var(--surface-2) 25%, color-mix(in srgb, var(--accent-soft) 70%, var(--surface-2)) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%; animation: ai-shimmer 1.4s linear infinite;
+}
+@keyframes ai-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .ai-waiting input, .ai-waiting textarea, .ai-waiting select { animation: none; } }
+.section-title-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.book-toggle { margin: -0.4rem 0 1rem 0.2rem; }

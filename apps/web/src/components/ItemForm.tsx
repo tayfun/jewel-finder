@@ -4,6 +4,7 @@ import {
   CONDITIONS,
   CONDITION_LABELS,
   ITEM_STATUSES,
+  ITEM_TYPE_LABELS,
   PACKAGE_SIZES,
   PACKAGE_SIZE_HINTS,
   PACKAGE_SIZE_LABELS,
@@ -14,14 +15,16 @@ import {
   type Rarity,
   parseMoney,
   toDecimal,
+  type AutofillSuggestion,
   type Condition,
   type Item,
   type ItemInput,
   type ItemStatus,
 } from "@jf/shared";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { EMPTY_BOOK, bookOrNull } from "../book";
 import { STATUS_LABELS } from "./Badges";
+import { Loader } from "./Loader";
 import { PhotoUploader } from "./PhotoUploader";
 
 interface FormState {
@@ -139,32 +142,110 @@ function fromForm(f: FormState): ItemInput | string {
   };
 }
 
+/** Auto-fill from photos, run by the page: still reading, done, or failed. */
+export interface AutofillState {
+  status: "loading" | "done" | "error";
+  suggestion?: AutofillSuggestion;
+  error?: string;
+  retry(): void;
+}
+
+/** Writes an AI suggestion into the empty fields of the form; returns the form and the fields it filled. */
+function applySuggestion(f: FormState, s: AutofillSuggestion): [FormState, Set<string>] {
+  const filled = new Set<string>();
+  const next: FormState = { ...f, book: { ...f.book } };
+  const put = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    if (value && !f[key]) {
+      next[key] = value;
+      filled.add(key);
+    }
+  };
+  put("title", s.title);
+  put("description", s.description);
+  put("brand", s.brand);
+  put("size", s.size);
+  put("colour", s.colour);
+  put("category", s.category);
+  put("condition", s.condition ?? "");
+  put("packageSize", s.packageSize ?? "");
+  put("weightGrams", s.weightGrams ? String(s.weightGrams) : "");
+  put("tags", s.tags.join(", "));
+  if (s.itemType === "book") {
+    const book = toBookForm(s.book);
+    for (const key of Object.keys(book) as (keyof BookForm)[]) {
+      const value = book[key];
+      if (value && !f.book[key]) {
+        (next.book as unknown as Record<string, unknown>)[key] = value;
+        filled.add(`book.${key}`);
+      }
+    }
+  }
+  return [next, filled];
+}
+
 export function ItemForm({
   initial,
   submitLabel,
   onSubmit,
+  ai,
 }: {
-  initial?: Item;
+  initial?: Partial<Item>;
   submitLabel: string;
   onSubmit(input: ItemInput): Promise<void>;
+  /** Auto-fill from photos for a new item: the form fills in once the suggestion arrives. */
+  ai?: AutofillState;
 }) {
   const [form, setForm] = useState(() => toForm(initial));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Fields the AI filled, marked until the seller edits them.
+  const [aiFilled, setAiFilled] = useState<Set<string>>(new Set());
+  // Book fields show for books: saved book details, or the AI saying it's a book. Shown by default otherwise.
+  const [showBook, setShowBook] = useState(() => (initial?.id ? Boolean(initial.book) : true));
+
+  const suggestion = ai?.suggestion;
+  useEffect(() => {
+    if (!suggestion) return;
+    setForm((f) => {
+      const [next, filled] = applySuggestion(f, suggestion);
+      setAiFilled(filled);
+      return next;
+    });
+    setShowBook(suggestion.itemType === "book");
+  }, [suggestion]);
+
+  const edited = (key: string) =>
+    setAiFilled((s) => {
+      if (!s.has(key)) return s;
+      const next = new Set(s);
+      next.delete(key);
+      return next;
+    });
+  /** Label class: marks a field the AI filled in. */
+  const mark = (key: string) => (aiFilled.has(key) ? "ai-filled" : undefined);
+  const loadingAi = ai?.status === "loading";
 
   const field = <K extends keyof FormState>(key: K) => ({
     value: form[key] as string,
-    onChange: (e: { target: { value: string } }) => setForm((f) => ({ ...f, [key]: e.target.value })),
+    onChange: (e: { target: { value: string } }) => {
+      edited(key);
+      setForm((f) => ({ ...f, [key]: e.target.value }));
+    },
   });
   const bookField = <K extends keyof BookForm>(key: K) => ({
     value: form.book[key] as string,
-    onChange: (e: { target: { value: string } }) => setForm((f) => ({ ...f, book: { ...f.book, [key]: e.target.value } })),
+    onChange: (e: { target: { value: string } }) => {
+      edited(`book.${key}`);
+      setForm((f) => ({ ...f, book: { ...f.book, [key]: e.target.value } }));
+    },
   });
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const input = fromForm(form);
-    if (typeof input === "string") return setError(input);
+    const parsed = fromForm(form);
+    if (typeof parsed === "string") return setError(parsed);
+    // Hidden book fields don't count: it isn't a book.
+    const input = showBook ? parsed : { ...parsed, book: null };
     setError(null);
     setSaving(true);
     try {
@@ -183,34 +264,67 @@ export function ItemForm({
         <PhotoUploader value={form.images} onChange={(u) => setForm((f) => ({ ...f, images: u(f.images) }))} />
       </section>
 
-      <section className="card">
+      {ai?.status === "loading" && (
+        <section className="card ai-status loading" aria-live="polite">
+          <Loader label="Reading your photos and filling in the details…" />
+          <p className="muted small center">Usually 5–20 seconds. You can start typing in the meantime; the AI only fills empty fields.</p>
+        </section>
+      )}
+      {ai?.status === "error" && (
+        <section className="card ai-status error" aria-live="polite">
+          <p className="error">Auto-fill didn't work: {ai.error}</p>
+          <div className="actions">
+            <button type="button" onClick={ai.retry}>
+              Try again
+            </button>
+            <span className="muted small">or fill in the details yourself.</span>
+          </div>
+        </section>
+      )}
+      {ai?.status === "done" && suggestion && (
+        <section className="card ai-status done" aria-live="polite">
+          <div className="ai-summary">
+            <span className="ai-badge">✨ Filled in from your photos</span>
+            <span className="badge">{ITEM_TYPE_LABELS[suggestion.itemType]}</span>
+            <span className="confidence">
+              <span>Confidence</span>
+              <meter min={0} max={1} low={0.5} high={0.8} optimum={1} value={suggestion.confidence} />
+              <strong>{Math.round(suggestion.confidence * 100)}%</strong>
+            </span>
+          </div>
+          <p className="muted small">Fields marked ✨ came from the AI. Check them before saving.</p>
+          {suggestion.notes && <p className="notice small">{suggestion.notes}</p>}
+        </section>
+      )}
+
+      <section className={`card ${loadingAi ? "ai-waiting" : ""}`}>
         <h2>Details</h2>
-        <label>
+        <label className={mark("title")}>
           Title
           <input required maxLength={120} placeholder="e.g. Levi's 501 straight jeans W32 L30" {...field("title")} />
         </label>
-        <label>
+        <label className={mark("description")}>
           Description
           <textarea rows={6} maxLength={5000} {...field("description")} />
         </label>
         <div className="grid-3">
-          <label>
+          <label className={mark("brand")}>
             Brand
             <input maxLength={80} {...field("brand")} />
           </label>
-          <label>
+          <label className={mark("category")}>
             Category
             <input maxLength={120} placeholder="e.g. Men › Jeans" {...field("category")} />
           </label>
-          <label>
+          <label className={mark("size")}>
             Size
             <input maxLength={40} {...field("size")} />
           </label>
-          <label>
+          <label className={mark("colour")}>
             Colour
             <input maxLength={40} {...field("colour")} />
           </label>
-          <label>
+          <label className={mark("condition")}>
             Condition
             <select {...field("condition")}>
               <option value="">—</option>
@@ -221,7 +335,7 @@ export function ItemForm({
               ))}
             </select>
           </label>
-          <label>
+          <label className={mark("packageSize")}>
             Package size
             <select {...field("packageSize")}>
               <option value="">—</option>
@@ -232,46 +346,59 @@ export function ItemForm({
               ))}
             </select>
           </label>
-          <label>
+          <label className={mark("weightGrams")}>
             Packed weight (g)
             <input inputMode="numeric" maxLength={6} placeholder="e.g. 450" {...field("weightGrams")} />
           </label>
-          <label>
+          <label className={mark("tags")}>
             Tags
             <input placeholder="comma, separated" {...field("tags")} />
           </label>
         </div>
       </section>
 
-      <section className="card">
-        <h2>Book details</h2>
-        <p className="muted small form-hint">For books. Leave empty for anything else.</p>
+      {!showBook && (
+        <p className="book-toggle muted small">
+          Not a book, so the book fields are hidden.{" "}
+          <button type="button" className="link" onClick={() => setShowBook(true)}>
+            It's a book
+          </button>
+        </p>
+      )}
+      {showBook && (
+      <section className={`card ${loadingAi ? "ai-waiting" : ""}`}>
+        <div className="section-title-row">
+          <h2>Book details</h2>
+          <button type="button" className="link small" onClick={() => setShowBook(false)}>
+            Not a book? Hide these
+          </button>
+        </div>
         <div className="grid-3">
-          <label>
+          <label className={mark("book.author")}>
             Author
             <input maxLength={200} {...bookField("author")} />
           </label>
-          <label>
+          <label className={mark("book.isbn")}>
             ISBN
             <input maxLength={20} inputMode="numeric" placeholder="10 or 13 digits" {...bookField("isbn")} />
           </label>
-          <label>
+          <label className={mark("book.publisher")}>
             Publisher
             <input maxLength={120} {...bookField("publisher")} />
           </label>
-          <label>
+          <label className={mark("book.yearPublished")}>
             Year published
             <input inputMode="numeric" maxLength={4} {...bookField("yearPublished")} />
           </label>
-          <label>
+          <label className={mark("book.edition")}>
             Edition
             <input maxLength={120} placeholder="e.g. First edition" {...bookField("edition")} />
           </label>
-          <label>
+          <label className={mark("book.printing")}>
             Printing
             <input maxLength={120} placeholder="e.g. First printing" {...bookField("printing")} />
           </label>
-          <label>
+          <label className={mark("book.format")}>
             Format
             <select {...bookField("format")}>
               <option value="">—</option>
@@ -282,11 +409,11 @@ export function ItemForm({
               ))}
             </select>
           </label>
-          <label>
+          <label className={mark("book.language")}>
             Language
             <input maxLength={40} {...bookField("language")} />
           </label>
-          <label>
+          <label className={mark("book.rarity")}>
             Rarity
             <select {...bookField("rarity")}>
               <option value="">—</option>
@@ -297,7 +424,7 @@ export function ItemForm({
               ))}
             </select>
           </label>
-          <label>
+          <label className={mark("book.dustJacket")}>
             Dust jacket
             <select {...bookField("dustJacket")}>
               <option value="">—</option>
@@ -314,11 +441,12 @@ export function ItemForm({
             Signed copy
           </label>
         </div>
-        <label>
+        <label className={mark("book.rarityNotes")}>
           Rarity notes
           <textarea rows={2} maxLength={1000} placeholder="Points of issue, number line, provenance…" {...bookField("rarityNotes")} />
         </label>
       </section>
+      )}
 
       <section className="card">
         <h2>Stock &amp; pricing</h2>
