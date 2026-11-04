@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { Logo } from "../components/Brand";
@@ -41,27 +42,52 @@ const STEPS = [
   { title: "Keep them fresh", body: "Relist and bump items with a click, and keep every platform in sync when something sells." },
 ];
 
+/** Three cards, like the logo; they fan out when the button is hovered. */
+function FanIcon() {
+  return (
+    <svg className="fan-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+      <rect x="6" y="3" width="8" height="13" rx="2" fill="#b9a2ff" />
+      <rect x="6" y="3" width="8" height="13" rx="2" fill="#ffc53d" />
+      <rect x="6" y="3" width="8" height="13" rx="2" fill="#ff6b57" />
+    </svg>
+  );
+}
+
 export function Landing() {
+  // The header tightens up once the page scrolls.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
     <div className="landing">
-      <header className="landing-nav">
-        <Link to="/" className="brand">
-          <Logo size={32} />
-        </Link>
-        <nav className="hide-sm">
-          <a href="#features">Features</a>
-          <a href="#how">How it works</a>
-        </nav>
-        <div className="actions">
-          <ThemeToggle />
-          <Link to="/login" className="button ghost">
-            Sign in
+      <div className={`landing-nav-wrap ${scrolled ? "scrolled" : ""}`}>
+        <header className="landing-nav">
+          <Link to="/" className="brand brand-lg" aria-label="Stock & List home">
+            <Logo size={46} />
           </Link>
-          <Link to="/signup" className="button primary">
-            Get started
-          </Link>
-        </div>
-      </header>
+          <span className="brand-tagline">One stock. Every marketplace.</span>
+          <nav className="hide-sm" aria-label="Sections">
+            <a href="#features">Features</a>
+            <a href="#how">How it works</a>
+            <Link to="/extension">Chrome extension</Link>
+          </nav>
+          <div className="actions">
+            <ThemeToggle />
+            <Link to="/login" className="button outline">
+              Sign in
+            </Link>
+            <Link to="/signup" className="button primary cta">
+              <FanIcon />
+              Get started
+            </Link>
+          </div>
+        </header>
+      </div>
 
       <section className="hero">
         <div className="hero-copy">
