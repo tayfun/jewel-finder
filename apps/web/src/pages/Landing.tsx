@@ -60,13 +60,12 @@ export function Landing() {
           <DemoTelemetry demo={demo} />
         </section>
 
-        <section id="how" className="landing-section demo-section">
+        <section id="features" className="landing-section features-section">
           <div className="section-head">
-            <h2 className="section-title">How it works</h2>
-            <p className="muted">Watch one item go from your stock to both sites, sink down the feeds, and bounce back.</p>
+            <h2 className="section-title">Features</h2>
+            <p className="muted">The busywork of reselling on more than one site, done for you.</p>
           </div>
-          <DemoStage demo={demo} />
-          <div id="features" className="highlights">
+          <div className="highlights">
             {HIGHLIGHTS.map((h, i) => (
               <div key={h.title} className={`highlight ${h.colour}`}>
                 <span className="highlight-num">{String(i + 1).padStart(2, "0")}</span>
@@ -77,6 +76,14 @@ export function Landing() {
               </div>
             ))}
           </div>
+        </section>
+
+        <section id="how" className="landing-section demo-section">
+          <div className="section-head">
+            <h2 className="section-title">How it works</h2>
+            <p className="muted">Watch one item go from your stock to both sites, sink down the feeds, and bounce back.</p>
+          </div>
+          <DemoStage demo={demo} />
         </section>
 
         <section className="cta-band">
@@ -90,6 +97,7 @@ export function Landing() {
         <footer className="landing-footer muted small">
           <span>© {new Date().getFullYear()} Stock & List</span>
           <span className="footer-links">
+            <Link to="/about">About</Link>
             <Link to="/privacy">Privacy</Link>
             <Link to="/login">Sign in</Link>
           </span>

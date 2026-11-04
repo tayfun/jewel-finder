@@ -14,6 +14,8 @@ import { Duplicates } from "./pages/Duplicates";
 import { Import } from "./pages/Import";
 import { Relist } from "./pages/Relist";
 import { Privacy } from "./pages/Privacy";
+import { About } from "./pages/About";
+import { CursorGlow } from "./components/CursorGlow";
 import { Settings } from "./pages/Settings";
 import { Admin } from "./pages/Admin";
 import "./styles.css";
@@ -29,6 +31,7 @@ const router = createRouter([
   { path: "/login", element: <Login /> },
   { path: "/signup", element: <Signup /> },
   { path: "/privacy", element: <Privacy /> },
+  { path: "/about", element: <About /> },
   {
     element: <RequireAuth />,
     children: [
@@ -56,6 +59,7 @@ createRoot(document.getElementById("root")!, {
     <Sentry.ErrorBoundary fallback={<ErrorScreen />}>
       <AuthProvider>
         <RouterProvider router={router} />
+        <CursorGlow />
       </AuthProvider>
     </Sentry.ErrorBoundary>
   </StrictMode>,

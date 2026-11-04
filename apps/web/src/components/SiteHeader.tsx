@@ -30,7 +30,7 @@ export function SiteHeader() {
           {/* Plain links: they also work from other pages, landing on the home page's section. */}
           <a href="/#features">Features</a>
           <a href="/#how">How it works</a>
-          <Link to="/privacy">Privacy</Link>
+          <Link to="/about">About</Link>
         </nav>
         <div className="actions">
           <ThemeToggle />

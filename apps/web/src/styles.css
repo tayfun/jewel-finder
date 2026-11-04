@@ -552,6 +552,9 @@ label.checkbox input { width: 1rem; }
 .legal h1 { margin-bottom: 0.25rem; }
 .legal h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; }
 .legal ul { padding-left: 1.25rem; display: grid; gap: 0.4rem; }
+.about h1 { font-size: clamp(2rem, 4.5vw, 2.8rem); letter-spacing: -0.03em; margin: 0.4rem 0 1rem; text-wrap: balance; }
+.about .lead { color: var(--text); opacity: 0.85; }
+.about-cta { margin-top: 2.2rem; }
 .footer-links { display: inline-flex; gap: 1rem; }
 
 /* ==========================================================================
@@ -709,7 +712,7 @@ label.checkbox-row { flex-direction: row; align-items: center; gap: 0.45rem; mar
 .telemetry-note { margin: 0; font-size: 0.75rem; color: var(--muted); }
 
 /* The demo. */
-.demo-section { border-top: none; }
+.demo-section { border-top: none; padding-top: 3rem; }
 .section-head { text-align: center; margin-bottom: 1.8rem; }
 .section-head .section-title { margin-bottom: 0.5rem; }
 .section-head p { margin: 0; }
@@ -797,7 +800,8 @@ label.checkbox-row { flex-direction: row; align-items: center; gap: 0.45rem; mar
 .row-price { flex: none; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
 
 /* The three highlights under the demo. */
-.highlights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1.4rem; }
+.highlights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.features-section { border-top: none; padding-bottom: 1rem; }
 .highlight { display: flex; gap: 0.9rem; padding: 1.1rem 1.2rem; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
 .highlight h3 { font-size: 1.02rem; margin: 0 0 0.3rem; }
 .highlight p { margin: 0; font-size: 0.92rem; }
@@ -823,3 +827,14 @@ label.checkbox-row { flex-direction: row; align-items: center; gap: 0.45rem; mar
   .feed-row, .stock-card, .hub-orb { transition: none; }
   .demo-hub .beam.fire, .feed-row.yours.pop { animation: none; }
 }
+
+/* A soft glow that follows the mouse, so it's easy to spot. Fine pointers only (not touch). */
+.cursor-glow {
+  position: fixed; left: 0; top: 0; z-index: 9999; pointer-events: none; width: 300px; height: 300px; margin: -150px 0 0 -150px;
+  border-radius: 50%; opacity: 0; transition: opacity 0.3s;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 30%, transparent) 0%, color-mix(in srgb, var(--brand-violet) 12%, transparent) 35%, transparent 70%);
+  mix-blend-mode: var(--glow-blend, normal);
+}
+.cursor-glow.on { opacity: 1; }
+:root { --glow-blend: light-dark(multiply, screen); }
+@media (pointer: coarse) { .cursor-glow { display: none; } }

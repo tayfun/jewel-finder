@@ -1,22 +1,40 @@
+import { useEffect, useState } from "react";
 import { THEMES, useTheme, type Theme } from "../theme";
 
 const ICONS: Record<Theme, string> = { system: "◐", light: "☀", dark: "☾" };
 const LABELS: Record<Theme, string> = { system: "System", light: "Light", dark: "Dark" };
 
-/** Compact button for headers: cycles system → light → dark. */
+/**
+ * Compact button for headers: switches between light and dark, showing the one in use. (Following the
+ * system setting is on the settings page; here it would look the same as one of the two.)
+ */
 export function ThemeToggle() {
   const [theme, setTheme] = useTheme();
-  const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]!;
+  const shown = useEffectiveTheme(theme);
+  const next = shown === "dark" ? "light" : "dark";
   return (
     <button
       className="icon-button"
       onClick={() => setTheme(next)}
-      title={`Theme: ${LABELS[theme]} (switch to ${LABELS[next].toLowerCase()})`}
-      aria-label={`Theme: ${LABELS[theme]}. Switch to ${LABELS[next]}`}
+      title={`Switch to ${LABELS[next].toLowerCase()} mode`}
+      aria-label={`Switch to ${LABELS[next].toLowerCase()} mode`}
     >
-      {ICONS[theme]}
+      {ICONS[shown]}
     </button>
   );
+}
+
+/** Light or dark, as actually shown: "system" resolves to the OS setting, and follows it when it changes. */
+function useEffectiveTheme(theme: Theme): "light" | "dark" {
+  const query = "(prefers-color-scheme: dark)";
+  const [osDark, setOsDark] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = () => setOsDark(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return theme === "system" ? (osDark ? "dark" : "light") : theme;
 }
 
 /** Segmented control for the settings page. */
