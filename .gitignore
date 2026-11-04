@@ -9,3 +9,5 @@ release/
 .env.secrets
 *.local
 .env.sentry
+
+.claude/settings.local.json
