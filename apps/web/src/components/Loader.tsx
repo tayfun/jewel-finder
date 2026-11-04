@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 // Line icons of the kind of things sellers list, drawn in the accent colour (stroke = currentColor).
-const ICONS: Record<string, ReactNode> = {
+export const ICONS: Record<string, ReactNode> = {
   shirt: <path d="M8.5 3.5 4 5.5 2 10l3 1.3V20h14v-8.7l3-1.3-2-4.5-4.5-2C15 5.2 13.7 6.3 12 6.3S9 5.2 8.5 3.5Z" />,
   book: (
     <>
