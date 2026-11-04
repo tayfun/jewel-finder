@@ -52,23 +52,54 @@ function Icon({ name, size = 30 }: { name: IconName; size?: number }) {
   );
 }
 
-/** A friendly cartoon of Tayfun; smiles with Stock & List, sweats doing it by hand. */
+/**
+ * A friendly cartoon of Tayfun: a geek with a crew cut and round glasses. Smiles with Stock & List; frowns,
+ * worries and sweats doing it by hand.
+ */
 function Avatar({ mode }: { mode: Mode }) {
+  const happy = mode === "app";
+  const ink = "#14181a";
   return (
     <svg className="about-avatar" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
       <rect width="64" height="64" rx="18" className="avatar-tile" />
-      <path d="M15 27c0-11 8-16 17-16s17 5 17 16" fill="#1f2937" />
-      <circle cx="32" cy="35" r="15" fill="#fde2b8" stroke="#14181a" strokeWidth="2.2" />
-      <circle cx="26" cy="33" r="2" fill="#14181a" />
-      <circle cx="38" cy="33" r="2" fill="#14181a" />
+      {/* ears, behind the head */}
+      <circle cx="17.5" cy="37" r="3.6" fill="#f5cfa0" stroke={ink} strokeWidth="1.8" />
+      <circle cx="46.5" cy="37" r="3.6" fill="#f5cfa0" stroke={ink} strokeWidth="1.8" />
+      {/* head */}
+      <ellipse cx="32" cy="37" rx="14" ry="15.5" fill="#fde2b8" stroke={ink} strokeWidth="2" />
+      {/* crew cut: short, flat on top, with a few bristles */}
+      <path d="M18.6 28.6C18.2 20 24 16.5 32 16.5s13.8 3.5 13.4 12.1c-2.4-3.8-6.6-5.6-13.4-5.6s-11 1.8-13.4 5.6Z" fill="#2b2f33" stroke={ink} strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M23 18.2v-1.6M27 17v-1.7M31 16.6v-1.8M35 16.7v-1.8M39 17.2v-1.7M43 18.6v-1.5" stroke={ink} strokeWidth="1.2" strokeLinecap="round" />
+      {/* eyebrows: relaxed, or raised and worried */}
+      {happy ? (
+        <path d="M21.8 29.2q3.4-1.5 6.8 0M35.4 29.2q3.4-1.5 6.8 0" fill="none" stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
+      ) : (
+        <path d="M21.8 29.4l6.8-1.9M35.4 27.5l6.8 1.9" fill="none" stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
+      )}
+      {/* round glasses */}
+      <path d="M20.6 35.5l-3-1M43.4 35.5l3-1" stroke={ink} strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="26" cy="35.5" r="5.1" fill="rgba(255,255,255,0.35)" stroke={ink} strokeWidth="2" />
+      <circle cx="38" cy="35.5" r="5.1" fill="rgba(255,255,255,0.35)" stroke={ink} strokeWidth="2" />
+      <path d="M31.3 34.6q0.7-1.2 1.4 0" fill="none" stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M23.2 32.4l1.6-1.4M35.2 32.4l1.6-1.4" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity="0.8" />
+      {/* eyes */}
+      <circle cx="26" cy={happy ? 35.4 : 35.8} r="1.5" fill={ink} />
+      <circle cx="38" cy={happy ? 35.4 : 35.8} r="1.5" fill={ink} />
+      {/* nose */}
+      <path d="M32 38.5q-1.8 3.2 0.4 3.6" fill="none" stroke={ink} strokeWidth="1.5" strokeLinecap="round" />
+      {/* cheeks and mouth */}
+      {happy && <circle cx="22.5" cy="42.5" r="2.2" fill="#ff8a78" opacity="0.45" />}
+      {happy && <circle cx="41.5" cy="42.5" r="2.2" fill="#ff8a78" opacity="0.45" />}
       <path
-        d={mode === "app" ? "M26 41c2.5 4 9.5 4 12 0" : "M26 44c2.5-4 9.5-4 12 0"}
+        d={happy ? "M27 45.2q5 4.2 10 0" : "M27.2 47.4q1.3-1.6 2.5 0t2.5 0t2.5 0t2.5 0"}
         fill="none"
-        stroke="#14181a"
-        strokeWidth="2.4"
+        stroke={ink}
+        strokeWidth="2"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
-      {mode === "hand" && <path d="M49 22s4 5 4 7a4 4 0 0 1-8 0c0-2 4-7 4-7z" fill="#5ec8f0" stroke="#14181a" strokeWidth="1.4" />}
+      {/* sweat drop when doing it by hand */}
+      {!happy && <path d="M48.5 22s3.6 4.4 3.6 6.3a3.6 3.6 0 0 1-7.2 0c0-1.9 3.6-6.3 3.6-6.3z" fill="#5ec8f0" stroke={ink} strokeWidth="1.3" />}
     </svg>
   );
 }
