@@ -158,7 +158,7 @@ export function Duplicates() {
                                 ? `No ${site} link saved: end it on ${site}, then press “I've ended it”`
                                 : !extension
                                   ? "Extension not detected"
-                                  : `Open this ${site} listing to end it; Jewel Finder records it when it's gone`
+                                  : `Open this ${site} listing to end it; Stock & List records it when it's gone`
                             }
                             onClick={() => endListing(pair, item!, m, "extension")}
                           >

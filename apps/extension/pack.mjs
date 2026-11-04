@@ -1,6 +1,6 @@
 // Zips the production build (dist-prod/) for the Chrome Web Store, and for manual installs:
 //
-//   node pack.mjs   → release/jewel-finder-<version>.zip
+//   node pack.mjs   → release/stock-and-list-<version>.zip
 //
 // Run `node build.mjs --prod` first (`pnpm release:ext` does both).
 import { zipSync } from "fflate";
@@ -21,6 +21,6 @@ if (!files["manifest.json"]) throw new Error(`${dir}/manifest.json missing: run 
 
 const { version } = JSON.parse(files["manifest.json"].toString());
 mkdirSync("release", { recursive: true });
-const out = `release/jewel-finder-${version}.zip`;
+const out = `release/stock-and-list-${version}.zip`;
 writeFileSync(out, zipSync(files, { level: 9 }));
 console.log(`Packed ${out} (${Object.keys(files).length} files)`);

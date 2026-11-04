@@ -29,7 +29,7 @@ export class HttpError extends Error {
 }
 
 /**
- * Calls the Jewel Finder API with the stored token (or an explicit one). Retries on a slow or dropped
+ * Calls the Stock & List API with the stored token (or an explicit one). Retries on a slow or dropped
  * connection when repeating the request is harmless: reads and updates always, a POST only with `retry`.
  */
 export async function api<T>(
@@ -48,10 +48,10 @@ export async function api<T>(
     res = await fetchRetry(
       API_URL + path,
       { method, headers, body: init.json !== undefined ? JSON.stringify(init.json) : init.body },
-      { what: "Jewel Finder", tries: repeatable ? 4 : 1 },
+      { what: "Stock & List", tries: repeatable ? 4 : 1 },
     );
   } catch (e) {
-    throw new HttpError(0, e instanceof NetworkError ? e.message : `Can't reach Jewel Finder at ${API_URL}`);
+    throw new HttpError(0, e instanceof NetworkError ? e.message : `Can't reach Stock & List at ${API_URL}`);
   }
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));

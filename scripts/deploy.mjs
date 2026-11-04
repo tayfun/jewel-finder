@@ -33,7 +33,7 @@ run("pnpm --filter @jf/web build");
 run("pnpm --filter @jf/extension release");
 const ext = resolve(root, "apps/extension");
 const { version } = JSON.parse(readFileSync(resolve(ext, "dist-prod/manifest.json"), "utf8"));
-copyFileSync(resolve(ext, `release/jewel-finder-${version}.zip`), resolve(root, "apps/web/dist/jewel-finder-extension.zip"));
+copyFileSync(resolve(ext, `release/stock-and-list-${version}.zip`), resolve(root, "apps/web/dist/stock-and-list-extension.zip"));
 
 // 2. Worker: bundle once, stamp the bundle and its map with matching debug IDs, upload the map,
 //    then deploy that exact bundle so the IDs Sentry knows are the ones running.

@@ -54,7 +54,7 @@ export function Admin() {
       <div className="page-head">
         <div>
           <h1>Admin</h1>
-          <p className="muted small">Everyone on Jewel Finder. Counts update whenever a user changes something or opens the app.</p>
+          <p className="muted small">Everyone on Stock & List. Counts update whenever a user changes something or opens the app.</p>
         </div>
       </div>
 

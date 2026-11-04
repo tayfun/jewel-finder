@@ -26,6 +26,10 @@
   --danger-soft: light-dark(#fde7e3, #3d1711);
   --warn: light-dark(#8a5a00, #f3c35b);
   --warn-soft: light-dark(#fdf1d3, #3a2c0b);
+  /* The logo's playful colours, for accents. */
+  --brand-coral: light-dark(#e4523c, #ff8a78);
+  --brand-amber: light-dark(#c98a00, #ffc53d);
+  --brand-violet: light-dark(#7c5ce6, #b9a2ff);
   --vinted: light-dark(#007782, #24aab5);
   --ebay: light-dark(#2f5ce8, #7896ff);
 
@@ -156,7 +160,10 @@ label small { font-weight: 400; }
 .topbar nav a:hover { color: var(--text); text-decoration: none; background: var(--surface-2); }
 .topbar nav a.active { color: var(--text); background: var(--surface-2); }
 .topbar-end { display: flex; align-items: center; gap: 0.8rem; }
-.brand { display: flex; align-items: center; gap: 0.55rem; white-space: nowrap; font-weight: 750; letter-spacing: -0.02em; color: var(--text); }
+.brand { display: flex; align-items: center; gap: 0.6rem; white-space: nowrap; font-weight: 800; font-size: 1.12rem; letter-spacing: -0.03em; color: var(--text); }
+.logo-mark { flex: none; border-radius: 26%; box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent); transition: transform 0.2s; }
+.brand:hover .logo-mark { transform: rotate(-6deg) scale(1.06); }
+.wordmark .amp { display: inline-block; margin: 0 0.14em; color: var(--brand-coral); font-style: italic; transform: rotate(-6deg) translateY(-0.02em); }
 .brand:hover { text-decoration: none; }
 .container { max-width: 1320px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1.75rem; flex-wrap: wrap; }
@@ -185,7 +192,8 @@ label small { font-weight: 400; }
   padding: 2.5rem 3rem; color: #effdf9;
   background:
     radial-gradient(28rem 20rem at 15% 10%, rgb(52 211 184 / 55%), transparent 70%),
-    radial-gradient(30rem 24rem at 100% 100%, rgb(14 116 144 / 50%), transparent 70%),
+    radial-gradient(22rem 16rem at 95% 15%, rgb(255 107 87 / 35%), transparent 70%),
+    radial-gradient(30rem 24rem at 100% 100%, rgb(255 197 61 / 28%), transparent 70%),
     linear-gradient(160deg, #0b6a5e, #08332f);
 }
 .signup-pitch .brand { color: #fff; }
@@ -213,7 +221,7 @@ label small { font-weight: 400; }
 .hero::before { content: ""; position: absolute; inset: -2rem -30% auto; height: 34rem; z-index: -1; background: radial-gradient(40rem 22rem at 70% 30%, var(--accent-soft), transparent 70%); }
 .eyebrow { display: inline-block; font-size: 0.8rem; font-weight: 650; color: var(--accent); background: var(--accent-soft); padding: 0.3rem 0.8rem; border-radius: 99px; margin-bottom: 1.3rem; }
 .hero h1 { font-size: clamp(2.3rem, 5vw, 3.6rem); font-weight: 800; line-height: 1.05; letter-spacing: -0.035em; margin: 0 0 1.3rem; }
-.accent { color: var(--accent); }
+.accent { color: var(--accent); background: linear-gradient(90deg, var(--accent), var(--brand-coral)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .lead { font-size: 1.15rem; color: var(--muted); max-width: 36rem; margin: 0 0 2rem; }
 .hero .actions { margin-bottom: 0.9rem; }
 .hero-visual { position: relative; height: 380px; }
@@ -235,7 +243,7 @@ label small { font-weight: 400; }
 .steps h3 { font-size: 1.05rem; margin: 0.9rem 0 0.4rem; }
 .steps p { margin: 0; }
 .step-num { display: inline-grid; place-items: center; width: 2.3rem; height: 2.3rem; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-weight: 750; }
-.cta-band { margin: 2rem 0 3rem; padding: 3.75rem 2rem; text-align: center; border-radius: 24px; color: #effdf9; background: radial-gradient(30rem 16rem at 20% 0%, rgb(52 211 184 / 45%), transparent 70%), linear-gradient(135deg, #0b6a5e, #08332f); }
+.cta-band { margin: 2rem 0 3rem; padding: 3.75rem 2rem; text-align: center; border-radius: 24px; color: #effdf9; background: radial-gradient(30rem 16rem at 20% 0%, rgb(52 211 184 / 45%), transparent 70%), radial-gradient(24rem 14rem at 90% 100%, rgb(255 107 87 / 35%), transparent 70%), radial-gradient(18rem 12rem at 70% 0%, rgb(255 197 61 / 25%), transparent 70%), linear-gradient(135deg, #0b6a5e, #08332f); }
 .cta-band h2 { font-size: 2rem; font-weight: 750; margin-bottom: 0.6rem; }
 .cta-band p { opacity: 0.88; margin: 0 0 1.75rem; }
 .cta-band .primary { background: #fff; border-color: #fff; color: #0b6a5e; }
@@ -248,6 +256,12 @@ label small { font-weight: 400; }
 .stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.9rem; margin-bottom: 1.75rem; }
 .stat { display: flex; flex-direction: column-reverse; gap: 0.2rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.15rem; box-shadow: var(--shadow-sm); }
 .stat .small { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+/* A stripe of the logo's colours across the stat cards. */
+.stat { border-top: 3px solid var(--stat-colour, var(--accent)); }
+.stat:nth-child(4n + 1) { --stat-colour: var(--accent); }
+.stat:nth-child(4n + 2) { --stat-colour: var(--brand-coral); }
+.stat:nth-child(4n + 3) { --stat-colour: var(--brand-amber); }
+.stat:nth-child(4n + 4) { --stat-colour: var(--brand-violet); }
 .stat-value { font-size: 1.65rem; font-weight: 750; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .toolbar { display: flex; gap: 1rem; align-items: center; margin-bottom: 1.2rem; flex-wrap: wrap; }
 .toolbar input[type="search"] { max-width: 340px; padding-left: 2.1rem; background: var(--surface) no-repeat 0.75rem center / 0.95rem url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23889290' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E"); }
@@ -520,21 +534,26 @@ label.checkbox-row { flex-direction: row; align-items: center; gap: 0.45rem; mar
 .loader { --track: min(560px, 88vw); display: flex; flex-direction: column; align-items: center; gap: 1.25rem; padding: 3rem 1rem; }
 .loader-full { min-height: 70vh; justify-content: center; }
 .loader-track {
-  position: relative; width: var(--track); height: 112px; overflow: hidden; color: var(--accent);
+  position: relative; width: var(--track); height: 112px; overflow: hidden;
   /* Items fade in at the left edge and out at the right. */
   mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent);
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent);
 }
 .loader-item { position: absolute; left: 0; bottom: 18px; animation: loader-ride 7.2s linear infinite; will-change: transform; }
-.loader-item svg { display: block; width: 64px; height: 64px; filter: drop-shadow(0 4px 10px color-mix(in srgb, var(--accent) 25%, transparent)); animation: loader-bob 1.2s ease-in-out infinite alternate; }
+.loader-item svg { display: block; width: 64px; height: 64px; filter: drop-shadow(0 4px 10px color-mix(in srgb, currentColor 30%, transparent)); animation: loader-bob 1.2s ease-in-out infinite alternate; }
 .loader-item:nth-child(even) svg { animation-delay: -0.6s; }
+/* Each item in one of the logo's colours. */
+.loader-item:nth-child(4n + 1) { color: var(--brand-coral); }
+.loader-item:nth-child(4n + 2) { color: var(--brand-amber); }
+.loader-item:nth-child(4n + 3) { color: var(--brand-violet); }
+.loader-item:nth-child(4n + 4) { color: var(--accent); }
 .loader-belt {
   position: absolute; left: 0; right: 0; bottom: 6px; height: 6px; border-radius: 3px;
   background: repeating-linear-gradient(90deg, var(--border-strong) 0 14px, transparent 14px 24px);
   background-size: 24px 6px; animation: loader-belt 0.6s linear infinite;
 }
 .loader-label { margin: 0; color: var(--text); font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; }
-.loader-label::after { content: ""; display: block; width: 3rem; height: 3px; margin: 0.7rem auto 0; border-radius: 2px; background: var(--accent); opacity: 0.5; }
+.loader-label::after { content: ""; display: block; width: 4rem; height: 4px; margin: 0.7rem auto 0; border-radius: 2px; background: linear-gradient(90deg, var(--brand-coral), var(--brand-amber), var(--brand-violet), var(--accent)); opacity: 0.8; }
 @keyframes loader-ride { from { transform: translateX(-72px); } to { transform: translateX(var(--track)); } }
 @keyframes loader-bob { from { transform: translateY(0) rotate(-4deg); } to { transform: translateY(-8px) rotate(4deg); } }
 @keyframes loader-belt { from { background-position: 0 0; } to { background-position: 24px 0; } }

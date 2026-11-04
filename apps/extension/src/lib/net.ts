@@ -18,7 +18,7 @@ export interface RetryOptions {
   tries?: number;
   /** Give up on one attempt after this long (default 90s: slow, not stuck). */
   timeoutMs?: number;
-  /** What was being fetched, for the error message ("Jewel Finder", "a photo"). */
+  /** What was being fetched, for the error message ("Stock & List", "a photo"). */
   what?: string;
   /** Pauses between attempts, in ms (default 1s, 3s, 7s). */
   backoffMs?: number[];

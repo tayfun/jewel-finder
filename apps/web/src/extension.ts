@@ -11,7 +11,7 @@ import { getToken } from "./api";
 /** Chrome Web Store listing, once published (VITE_EXTENSION_URL in apps/web/.env). */
 export const EXTENSION_STORE_URL = import.meta.env.VITE_EXTENSION_URL || null;
 /** The production build, zipped and served next to the app by the deploy script. */
-export const EXTENSION_ZIP_URL = "/jewel-finder-extension.zip";
+export const EXTENSION_ZIP_URL = "/stock-and-list-extension.zip";
 
 function post(msg: WebToExtension) {
   window.postMessage(msg, window.location.origin);
@@ -120,7 +120,7 @@ function request(
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       off();
-      reject(new Error("The Jewel Finder extension didn't respond. Is it installed and enabled?"));
+      reject(new Error("The Stock & List extension didn't respond. Is it installed and enabled?"));
     }, timeoutMs);
     const off = onMessage((msg) => {
       if (msg.type !== "LIST_RESULT" || msg.requestId !== requestId) return;

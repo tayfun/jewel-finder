@@ -16,7 +16,7 @@ const noIO: ImportIO = { fetchText: () => Promise.reject(new Error("no network")
 
 afterEach(() => {
   document.body.innerHTML = "";
-  document.getElementById("jewel-finder-import")?.remove();
+  document.getElementById("stock-and-list-import")?.remove();
   vi.unstubAllGlobals();
 });
 
@@ -293,7 +293,7 @@ describe("import panel", () => {
     expect(rows(panel).map((r) => r.dataset.id)).toEqual(["1", "2", "3", "4"]);
     // Already in the inventory: marked, can't be picked.
     const already = rows(panel)[1]!;
-    expect(already.textContent).toContain("In Jewel Finder");
+    expect(already.textContent).toContain("In Stock & List");
     expect(already.querySelector("input")!.disabled).toBe(true);
     expect(button(panel, /pick listings/i).disabled).toBe(true);
 
@@ -325,7 +325,7 @@ describe("import panel", () => {
     expect(summary).toContain("Imported 1 · 1 failed");
     expect(summary).toContain("Hoodie 3: This listing no longer exists");
     expect(summary).toContain("1 looks like an item you already had (maybe from eBay). Review duplicates");
-    expect(rows(panel)[0]!.textContent).toContain("In Jewel Finder");
+    expect(rows(panel)[0]!.textContent).toContain("In Stock & List");
     panel.close();
   });
 

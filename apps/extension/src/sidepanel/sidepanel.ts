@@ -233,7 +233,7 @@ function renderLogin() {
         }
       },
     },
-    h("h1", {}, "💎 Jewel Finder"),
+    h("h1", { class: "brand" }, h("img", { src: "icons/logo.svg", alt: "", width: "32", height: "32" }), "Stock", h("span", { class: "amp" }, "&"), "List"),
     h("p", {}, "Sign in to list your inventory on Vinted and eBay."),
     h("label", {}, "Email", email),
     h("label", {}, "Password", password),
@@ -347,7 +347,7 @@ function renderInventory() {
     h(
       "header",
       {},
-      h("span", { class: "brand" }, "💎 Jewel Finder"),
+      h("span", { class: "brand" }, h("img", { src: "icons/logo.svg", alt: "", width: "24", height: "24" }), "Stock", h("span", { class: "amp" }, "&"), "List"),
       h("a", { href: API_URL, target: "_blank", title: "Open the web app" }, "Open app ↗"),
       h(
         "button",

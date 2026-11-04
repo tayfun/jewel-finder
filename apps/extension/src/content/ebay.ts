@@ -264,7 +264,7 @@ export const ebay: Adapter = {
 
   hint: (url) =>
     url.pathname.startsWith("/sl/prelist")
-      ? "Pick the matching product or category and the condition. Jewel Finder fills in the listing form on the next page."
+      ? "Pick the matching product or category and the condition. Stock & List fills in the listing form on the next page."
       : null,
 
   detectPublished(url, doc) {
@@ -284,7 +284,7 @@ export const ebay: Adapter = {
   delist: {
     async step(ctx) {
       const id = targetOf(ctx)?.externalId;
-      const after = "Jewel Finder updates your inventory once it's done.";
+      const after = "Stock & List updates your inventory once it's done.";
       const text = normalize(document.body?.innerText ?? document.body?.textContent);
       const onEndPage =
         /EndingMyAuction|\/end(listing)?\b/i.test(location.href) ||

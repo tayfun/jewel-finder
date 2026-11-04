@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { Logo } from "../components/Brand";
 
 const FEATURES = [
   {
@@ -23,7 +24,7 @@ const FEATURES = [
     body: "Bring your existing Vinted and eBay listings across in one go. No need to start your inventory from scratch.",
   },
   {
-    icon: "💎",
+    icon: "🏷️",
     title: "Find the treasure",
     body: "Spot underpriced gems on the platforms you already use and save them straight into your stock.",
   },
@@ -45,8 +46,7 @@ export function Landing() {
     <div className="landing">
       <header className="landing-nav">
         <Link to="/" className="brand">
-          <img src="/favicon.svg" alt="" width={24} height={24} />
-          Jewel Finder
+          <Logo size={32} />
         </Link>
         <nav className="hide-sm">
           <a href="#features">Features</a>
@@ -70,7 +70,7 @@ export function Landing() {
             Spend your time finding stock, <span className="accent">not relisting it.</span>
           </h1>
           <p className="lead">
-            Jewel Finder keeps your inventory in one place and lists it on eBay and Vinted in a couple of clicks. It
+            Stock & List keeps your inventory in one place and lists it on eBay and Vinted in a couple of clicks. It
             relists and bumps items back to the top too, so you can stop deleting and re-uploading by hand.
           </p>
           <div className="actions">
@@ -142,7 +142,7 @@ export function Landing() {
       </section>
 
       <footer className="landing-footer muted small">
-        <span>© {new Date().getFullYear()} Jewel Finder</span>
+        <span>© {new Date().getFullYear()} Stock & List</span>
         <span className="footer-links">
           <Link to="/privacy">Privacy</Link>
           <Link to="/login">Sign in</Link>

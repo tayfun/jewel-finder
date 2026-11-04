@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { Logo } from "../components/Brand";
 
 const UPDATED = "3 November 2026";
 /** Set VITE_CONTACT_EMAIL in apps/web/.env; shown for privacy requests. */
@@ -15,8 +16,7 @@ export function Privacy() {
     <div className="landing">
       <header className="landing-nav">
         <Link to="/" className="brand">
-          <img src="/favicon.svg" alt="" width={24} height={24} />
-          Jewel Finder
+          <Logo size={32} />
         </Link>
         <div className="actions">
           <ThemeToggle />
@@ -28,8 +28,8 @@ export function Privacy() {
         <p className="muted">Last updated {UPDATED}</p>
 
         <p>
-          Jewel Finder helps resellers keep their inventory in one place and list it on Vinted and eBay. This policy covers
-          the Jewel Finder web app and the Jewel Finder Chrome extension: what we collect, why, and who else handles it.
+          Stock & List helps resellers keep their inventory in one place and list it on Vinted and eBay. This policy covers
+          the Stock & List web app and the Stock & List Chrome extension: what we collect, why, and who else handles it.
           We don't sell your data, show ads, or track you across other websites.
         </p>
 
@@ -51,7 +51,7 @@ export function Privacy() {
 
         <h2>How we use it</h2>
         <p>
-          Only to provide Jewel Finder: to sign you in, store and show your inventory, fill in listings for you, and find
+          Only to provide Stock & List: to sign you in, store and show your inventory, fill in listings for you, and find
           and fix problems. We don't use your data for advertising, and we don't build profiles of you.
         </p>
 
@@ -81,7 +81,7 @@ export function Privacy() {
             descriptions from eBay's description server. It only does this after you start an import and pick listings.
           </li>
           <li>
-            It only runs on Vinted, eBay and the Jewel Finder site. It doesn't read your browsing history, other
+            It only runs on Vinted, eBay and the Stock & List site. It doesn't read your browsing history, other
             websites, or your marketplace messages, and it collects no analytics.
           </li>
         </ul>
@@ -152,7 +152,7 @@ export function Privacy() {
         </p>
 
         <h2>Children</h2>
-        <p>Jewel Finder is for adults selling online and isn't directed at children.</p>
+        <p>Stock & List is for adults selling online and isn't directed at children.</p>
 
         <h2>Changes</h2>
         <p>
@@ -167,7 +167,7 @@ export function Privacy() {
       </article>
 
       <footer className="landing-footer muted small">
-        <span>© {new Date().getFullYear()} Jewel Finder</span>
+        <span>© {new Date().getFullYear()} Stock & List</span>
         <Link to="/">Home</Link>
       </footer>
     </div>

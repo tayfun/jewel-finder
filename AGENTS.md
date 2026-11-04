@@ -1,4 +1,4 @@
-# Working on Jewel Finder (for coding agents)
+# Working on Stock & List (for coding agents)
 
 Standing rules for every session. See README.md and PLAN.md for the project itself.
 

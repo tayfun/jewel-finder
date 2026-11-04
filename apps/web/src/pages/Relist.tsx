@@ -111,12 +111,12 @@ export function Relist() {
       </p>
       {extension === false && (
         <p className="notice">
-          Relisting uses the Jewel Finder Chrome extension. <Link to="/extension">Install it</Link>, then come back here.
+          Relisting uses the Stock & List Chrome extension. <Link to="/extension">Install it</Link>, then come back here.
         </p>
       )}
       {opened > 0 && (
         <p className="notice">
-          Opened {opened} tab{opened === 1 ? "" : "s"}. In each, check the form and publish; Jewel Finder then opens the old
+          Opened {opened} tab{opened === 1 ? "" : "s"}. In each, check the form and publish; Stock & List then opens the old
           listing so you can remove it.
           {picked.length > 0 && ` ${picked.length} more selected: press Relist again when you're ready.`}
         </p>

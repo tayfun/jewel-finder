@@ -1,8 +1,8 @@
 // Builds the extension. Content scripts must be classic scripts (IIFE);
 // the background service worker is an ES module.
 //
-//   node build.mjs          → dist/       "Jewel Finder (dev)", talks to http://localhost:8787
-//   node build.mjs --prod   → dist-prod/  "Jewel Finder", talks to the deployed Worker
+//   node build.mjs          → dist/       "Stock & List (dev)", talks to http://localhost:8787
+//   node build.mjs --prod   → dist-prod/  "Stock & List", talks to the deployed Worker
 //   API_URL=https://… node build.mjs      → dist-prod/ for any other deployment
 //
 // The two builds match different hosts, so both can be loaded in Chrome side by side.
@@ -24,12 +24,12 @@ const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 
 const manifest = {
   manifest_version: 3,
-  name: dev ? "Jewel Finder (dev)" : "Jewel Finder",
-  description: "List your Jewel Finder inventory on Vinted and eBay, and import the listings you already have.",
+  name: dev ? "Stock & List (dev)" : "Stock & List",
+  description: "Fill in Vinted and eBay listings from your Stock & List inventory, keep them in sync, and import the listings you already have.",
   version: pkg.version ?? "0.1.0",
   minimum_chrome_version: "116",
   icons: { 16: "icons/16.png", 48: "icons/48.png", 128: "icons/128.png" },
-  action: { default_title: "Jewel Finder" },
+  action: { default_title: "Stock & List" },
   side_panel: { default_path: "sidepanel.html" },
   background: { service_worker: "background.js", type: "module" },
   permissions: ["storage", "sidePanel"],

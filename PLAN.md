@@ -1,4 +1,4 @@
-# Jewel Finder — Plan
+# Stock & List — Plan
 
 Inventory management for people who resell on eBay and Vinted. Users keep their stock in one
 place and push items to marketplaces through a Chrome extension that fills in the marketplace's
@@ -39,8 +39,8 @@ own "sell an item" form (no marketplace APIs — Vinted has none, and we don't w
 | AI listing data | Gemini (`@google/genai`, model in `GEMINI_MODEL`, default `gemini-3.8-flash`, falling back to `GEMINI_FALLBACK_MODEL` (`gemini-3.5-flash`) on 429/503/504) called from the Worker with the item's photos and a `responseJsonSchema`; the result is validated (zod + ISBN check digit) and shown for review before anything is saved | Key stays server-side; structured output; the seller stays in control of what gets written |
 | Monitoring | Sentry: `@sentry/cloudflare` (`withSentry`, Hono middleware, Durable Object wrapper, Gemini spans) and `@sentry/react` (router tracing, error boundary, route errors); traces propagate browser → Worker | Errors and slow requests visible end to end; DSN-less environments send nothing; only the account id is attached. `scripts/deploy.mjs` uploads source maps (debug IDs) for both, and deploys the exact Worker bundle it uploaded maps for |
 | Web → extension | A bridge content script on the web app origin relays `window.postMessage` requests to the background worker | No need to hard-code the extension id in the web app |
-| Extension builds | `dist/` ("Jewel Finder (dev)", localhost) and `dist-prod/` (deployed Worker) match different hosts, so both can be loaded side by side; `pnpm release:ext` zips `dist-prod/` | Accounts live on one server; the side panel shows which one it signs in to |
-| Extension distribution | Chrome Web Store once approved (`VITE_EXTENSION_URL` → "Add to Chrome"); until then `/extension` offers the zip, which the deploy serves at `/jewel-finder-extension.zip` | Every "not detected" message has somewhere to send the seller |
+| Extension builds | `dist/` ("Stock & List (dev)", localhost) and `dist-prod/` (deployed Worker) match different hosts, so both can be loaded side by side; `pnpm release:ext` zips `dist-prod/` | Accounts live on one server; the side panel shows which one it signs in to |
+| Extension distribution | Chrome Web Store once approved (`VITE_EXTENSION_URL` → "Add to Chrome"); until then `/extension` offers the zip, which the deploy serves at `/stock-and-list-extension.zip` | Every "not detected" message has somewhere to send the seller |
 | Privacy | Public `/privacy` page covering the web app and extension (Web Store requirement); contact address from `VITE_CONTACT_EMAIL` | Required for the store listing; describes only what the code actually does |
 
 ## 2. Data model (per-user SQLite inside `AccountDO`)

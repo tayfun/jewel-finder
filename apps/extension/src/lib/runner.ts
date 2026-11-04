@@ -64,9 +64,9 @@ export interface Delister {
 }
 
 // sessionStorage is per tab and survives the full-page navigations marketplaces do after submit.
-const filledKey = (ctx: JobContext) => `jewel-finder.filled.${ctx.job.itemId}.${ctx.job.marketplace}`;
+const filledKey = (ctx: JobContext) => `stock-and-list.filled.${ctx.job.itemId}.${ctx.job.marketplace}`;
 // A listing reported by watchPublished, kept in case the page navigates away before we've saved it.
-const publishedKey = (ctx: JobContext) => `jewel-finder.published.${ctx.job.itemId}.${ctx.job.marketplace}`;
+const publishedKey = (ctx: JobContext) => `stock-and-list.published.${ctx.job.itemId}.${ctx.job.marketplace}`;
 
 function storedPublished(ctx: JobContext): Published | null {
   try {
@@ -78,7 +78,7 @@ function storedPublished(ctx: JobContext): Published | null {
 }
 
 // Set when we publish; the tidy-up keeps going on the next page load (the job itself is done by then).
-const AFTER_PUBLISHED_KEY = "jewel-finder.after-published";
+const AFTER_PUBLISHED_KEY = "stock-and-list.after-published";
 const AFTER_PUBLISHED_FOR_MS = 60_000;
 
 function afterPublished(adapter: Adapter) {
@@ -131,10 +131,10 @@ export async function run(adapter: Adapter): Promise<void> {
         showBanner({ kind: "working", title, message: "Relisted! Now opening the old listing to remove it…" });
         setTimeout(() => location.assign(next), 1500);
       } else {
-        showBanner({ kind: "done", title, message: "Listed! Saved to your Jewel Finder inventory." });
+        showBanner({ kind: "done", title, message: "Listed! Saved to your Stock & List inventory." });
       }
     } catch (e) {
-      showBanner({ kind: "error", title, message: `Listed, but couldn't update Jewel Finder: ${(e as Error).message}` });
+      showBanner({ kind: "error", title, message: `Listed, but couldn't update Stock & List: ${(e as Error).message}` });
     }
   }
 
@@ -179,9 +179,9 @@ export async function run(adapter: Adapter): Promise<void> {
   }, 700);
 }
 
-const delistKey = (ctx: JobContext) => `jewel-finder.delist.${ctx.job.itemId}.${ctx.job.marketplace}`;
+const delistKey = (ctx: JobContext) => `stock-and-list.delist.${ctx.job.itemId}.${ctx.job.marketplace}`;
 
-/** Cross-delisting: walk the seller through ending the listing, then mark it ended in Jewel Finder. */
+/** Cross-delisting: walk the seller through ending the listing, then mark it ended in Stock & List. */
 async function runDelist(adapter: Adapter, ctx: JobContext): Promise<void> {
   const cleanup = ctx.job.kind === "cleanup";
   const site = MARKETPLACE_LABELS[adapter.marketplace];
@@ -213,11 +213,11 @@ async function runDelist(adapter: Adapter, ctx: JobContext): Promise<void> {
             kind: "done",
             title,
             message: cleanup
-              ? "Relisted: the old listing is gone, and Jewel Finder has the new one."
-              : "Listing ended and marked as ended in Jewel Finder.",
+              ? "Relisted: the old listing is gone, and Stock & List has the new one."
+              : "Listing ended and marked as ended in Stock & List.",
           });
         } catch (e) {
-          showBanner({ kind: "error", title, message: `Ended, but couldn't update Jewel Finder: ${(e as Error).message}` });
+          showBanner({ kind: "error", title, message: `Ended, but couldn't update Stock & List: ${(e as Error).message}` });
         }
         return;
       }

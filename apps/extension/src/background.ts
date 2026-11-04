@@ -74,7 +74,7 @@ async function jobFor(sender: chrome.runtime.MessageSender): Promise<Job | null>
   return (await getJobs())[tabOf(sender)] ?? null;
 }
 
-/** Tells open Jewel Finder pages to reload (the bridge content script watches this key). */
+/** Tells open Stock & List pages to reload (the bridge content script watches this key). */
 async function itemsChanged(itemId: string) {
   await chrome.storage.local.set({ [ITEMS_CHANGED_KEY]: { itemId, at: Date.now() } satisfies ItemsChanged });
 }
@@ -99,7 +99,7 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 
-/** Downloads a listing photo from the marketplace's CDN and stores it in Jewel Finder. */
+/** Downloads a listing photo from the marketplace's CDN and stores it in Stock & List. */
 async function copyPhoto(url: string): Promise<string> {
   if (!isPhotoHost(url)) throw new Error(`Not a marketplace photo: ${url}`);
   const blob = await fetchBlob(url, {}, { what: "the marketplace's photo server" });
@@ -186,7 +186,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
   async START_LISTING({ itemId, marketplace, token }) {
     if (token) await adoptToken(token);
     const auth = await getAuth();
-    if (!auth) throw new Error("Sign in to the Jewel Finder extension first");
+    if (!auth) throw new Error("Sign in to the Stock & List extension first");
     const item = await api<ItemWithListings>(`/api/items/${itemId}`);
     if (!item.images.length) throw new Error("Add at least one photo before listing");
     const existing = item.listings.find((l) => l.marketplace === marketplace);
@@ -206,7 +206,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
   // Cross-delisting: open the live listing so the content script can take it down.
   async START_DELISTING({ itemId, marketplace, token }) {
     if (token) await adoptToken(token);
-    if (!(await getAuth())) throw new Error("Sign in to the Jewel Finder extension first");
+    if (!(await getAuth())) throw new Error("Sign in to the Stock & List extension first");
     const item = await api<ItemWithListings>(`/api/items/${itemId}`);
     const listing = item.listings.find((l) => l.marketplace === marketplace);
     if (!listing || (listing.status !== "listed" && listing.status !== "ending")) {
@@ -225,7 +225,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
   async START_RELISTING({ itemId, marketplace, token }) {
     if (token) await adoptToken(token);
     const auth = await getAuth();
-    if (!auth) throw new Error("Sign in to the Jewel Finder extension first");
+    if (!auth) throw new Error("Sign in to the Stock & List extension first");
     const item = await api<ItemWithListings>(`/api/items/${itemId}`);
     const site = MARKETPLACE_LABELS[marketplace];
     const listing = item.listings.find((l) => l.marketplace === marketplace);
@@ -248,7 +248,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
   async START_PRICE_CHECK({ itemId, token }) {
     if (token) await adoptToken(token);
     const auth = await getAuth();
-    if (!auth) throw new Error("Sign in to the Jewel Finder extension first");
+    if (!auth) throw new Error("Sign in to the Stock & List extension first");
     const item = await api<ItemWithListings>(`/api/items/${itemId}`);
     const queries = priceQueries(item);
     if (!queries.length) throw new Error("Give the item a title first");
@@ -313,7 +313,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
     const files = await mapLimit(item.images, 3, async (key, i): Promise<ImageFile | null> => {
       let blob: Blob;
       try {
-        blob = await fetchBlob(imageUrl(API_URL, key), {}, { what: `Jewel Finder for photo ${i + 1} of ${item.images.length}` });
+        blob = await fetchBlob(imageUrl(API_URL, key), {}, { what: `Stock & List for photo ${i + 1} of ${item.images.length}` });
       } catch (e) {
         if (e instanceof NetworkError) throw e;
         return null;
@@ -390,7 +390,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
   async START_IMPORT({ marketplace, tabId, token }) {
     if (token) await adoptToken(token);
     const auth = await getAuth();
-    if (!auth) throw new Error("Sign in to the Jewel Finder extension first");
+    if (!auth) throw new Error("Sign in to the Stock & List extension first");
     const job: ImportJob = { marketplace, startedAt: Date.now() };
     if (tabId != null) {
       await setImport(tabId, job);
@@ -430,7 +430,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
       try {
         images.push(await copyPhoto(url));
       } catch (e) {
-        console.warn("Jewel Finder: skipped a photo", url, e);
+        console.warn("Stock & List: skipped a photo", url, e);
       }
     }
     // Safe to repeat: the import skips listings it already has.

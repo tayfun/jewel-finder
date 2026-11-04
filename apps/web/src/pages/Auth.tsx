@@ -2,6 +2,7 @@ import type { Credentials } from "@jf/shared";
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../auth";
+import { Logo } from "../components/Brand";
 
 /** Shared submit/redirect logic for the sign-in and sign-up forms. */
 function useAuthForm(action: (creds: Credentials) => Promise<void>) {
@@ -33,8 +34,7 @@ function useAuthForm(action: (creds: Credentials) => Promise<void>) {
 function Brand() {
   return (
     <Link to="/" className="brand">
-      <img src="/favicon.svg" alt="" width={26} height={26} />
-      Jewel Finder
+      <Logo size={34} />
     </Link>
   );
 }
@@ -76,7 +76,7 @@ export function Login() {
           {f.busy ? "Signing in…" : "Sign in"}
         </button>
         <p className="muted small center">
-          New to Jewel Finder? <Link to="/signup">Create an account</Link>
+          New to Stock & List? <Link to="/signup">Create an account</Link>
         </p>
       </form>
     </div>

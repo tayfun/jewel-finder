@@ -7,7 +7,7 @@ import { Loader } from "../components/Loader";
 /** "/" is the marketing page for visitors and the inventory for signed-in users. */
 export function Home() {
   const { account, loading } = useAuth();
-  if (loading) return <Loader full label="Loading Jewel Finder…" />;
+  if (loading) return <Loader full label="Loading Stock & List…" />;
   if (!account) return <Landing />;
   return (
     <Layout>

@@ -31,8 +31,8 @@ describe("withRetry / fetchRetry", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
 
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
-    await expect(fetchRetry("https://x.test/a", {}, { ...fast, tries: 1, what: "Jewel Finder" })).rejects.toThrow(
-      /Couldn't reach Jewel Finder: the connection failed 1 times/,
+    await expect(fetchRetry("https://x.test/a", {}, { ...fast, tries: 1, what: "Stock & List" })).rejects.toThrow(
+      /Couldn't reach Stock & List: the connection failed 1 times/,
     );
   });
 

@@ -1,4 +1,5 @@
 import type { FillReport } from "../messages";
+import { logoMark } from "./logo";
 
 export type BannerState =
   | { kind: "working"; title: string; message: string }
@@ -17,6 +18,7 @@ const CSS = `
     background: linear-gradient(135deg, #0b7a6c, #08574d); color: #fff;
     border-radius: 14px 14px 0 0; font-weight: 650; font-size: 14.5px; cursor: move; user-select: none; touch-action: none; }
   .dragging { opacity: .94; box-shadow: 0 20px 50px rgb(0 0 0 / 30%); }
+  header .logo { flex: none; display: grid; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 25%)); }
   header .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   header button { all: unset; cursor: pointer; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; font-size: 17px; opacity: .85; }
   header button:hover { opacity: 1; background: rgb(255 255 255 / 16%); }
@@ -42,6 +44,8 @@ const CSS = `
   .copy:hover { background: #c6eee4; }
   .footer { display: flex; justify-content: space-between; align-items: center; padding: 9px 14px; border-top: 1px solid #e0e4df; background: #f7f8f6;
     border-radius: 0 0 14px 14px; }
+  .footer .brand { font-weight: 800; letter-spacing: -0.02em; color: #2d3533; }
+  .footer .brand .amp { display: inline-block; margin: 0 2px; color: #e4523c; font-style: italic; transform: rotate(-6deg); }
   .footer button { all: unset; cursor: pointer; color: #4f5a58; font-size: 12.5px; font-weight: 500; }
   .footer button:hover { color: #b42318; }
   .error header { background: linear-gradient(135deg, #c0331f, #92210f); }
@@ -155,7 +159,7 @@ export function setCancelHandler(fn: () => void, label = "Cancel this listing") 
 
 export function showBanner(state: BannerState) {
   if (!host) {
-    host = el("div", { id: "jewel-finder-banner" });
+    host = el("div", { id: "stock-and-list-banner" });
     root = host.attachShadow({ mode: "closed" });
     document.documentElement.append(host);
     loadPos();
@@ -169,7 +173,7 @@ export function showBanner(state: BannerState) {
   };
   const close = el("button", { title: "Hide" }, "×");
   close.onclick = () => hideBanner();
-  const header = el("header", { title: "Drag to move · double-click to put back" }, el("span", {}, "💎"), el("span", { class: "t" }, state.title), min, close);
+  const header = el("header", { title: "Drag to move · double-click to put back" }, logoMark(), el("span", { class: "t" }, state.title), min, close);
   makeDraggable(header, panel);
   panel.append(header);
 
@@ -220,7 +224,7 @@ export function showBanner(state: BannerState) {
       onCancel();
       hideBanner();
     };
-    panel.append(el("div", { class: "footer" }, el("span", { class: "val" }, "Jewel Finder"), cancel));
+    panel.append(el("div", { class: "footer" }, el("span", { class: "brand" }, "Stock", el("span", { class: "amp" }, "&"), "List"), cancel));
   }
 
   root.replaceChildren(el("style", {}, CSS), panel);

@@ -42,7 +42,7 @@ export function Import() {
           <ol className="install-steps">
             <li>Make sure you're signed in to Vinted or eBay in this browser.</li>
             <li>
-              Press a button below. The extension opens {WHERE.vinted} or {WHERE.ebay}, with a Jewel Finder panel on the
+              Press a button below. The extension opens {WHERE.vinted} or {WHERE.ebay}, with a Stock & List panel on the
               page.
             </li>
             <li>
@@ -61,7 +61,7 @@ export function Import() {
           <h2>Start an import</h2>
           {extension === false ? (
             <p className="notice">
-              Importing uses the Jewel Finder Chrome extension. <Link to="/extension">Install it</Link>, then come back here.
+              Importing uses the Stock & List Chrome extension. <Link to="/extension">Install it</Link>, then come back here.
             </p>
           ) : (
             <div className="actions">
@@ -78,8 +78,8 @@ export function Import() {
             <p className="notice">
               Opened {MARKETPLACE_LABELS[opened]} in a new tab.{" "}
               {opened === "vinted"
-                ? "If it shows the home page, press “Open my wardrobe” in the Jewel Finder panel (or open your profile)."
-                : "Pick the listings to import in the Jewel Finder panel."}{" "}
+                ? "If it shows the home page, press “Open my wardrobe” in the Stock & List panel (or open your profile)."
+                : "Pick the listings to import in the Stock & List panel."}{" "}
               Imported items show up in your <Link to="/">inventory</Link>.
             </p>
           )}

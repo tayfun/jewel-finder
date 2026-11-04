@@ -20,7 +20,7 @@ export function Extension() {
           </p>
           <p className="muted small">Works in Chrome, Edge, Brave and other Chromium browsers on a computer.</p>
           <p className="muted small">
-            It only runs on Vinted, eBay and Jewel Finder. See the <Link to="/privacy">privacy policy</Link>.
+            It only runs on Vinted, eBay and Stock & List. See the <Link to="/privacy">privacy policy</Link>.
           </p>
         </section>
 
@@ -33,7 +33,7 @@ export function Extension() {
             </p>
           ) : EXTENSION_STORE_URL ? (
             <>
-              <p>Add it from the Chrome Web Store, then sign in from its side panel with your Jewel Finder account.</p>
+              <p>Add it from the Chrome Web Store, then sign in from its side panel with your Stock & List account.</p>
               <a className="button primary big" href={EXTENSION_STORE_URL} target="_blank" rel="noreferrer">
                 Add to Chrome
               </a>
@@ -54,7 +54,7 @@ export function Extension() {
                 <li>
                   Click <strong>Load unpacked</strong> and pick the unzipped folder.
                 </li>
-                <li>Click the Jewel Finder icon in the toolbar and sign in.</li>
+                <li>Click the Stock & List icon in the toolbar and sign in.</li>
               </ol>
             </>
           )}

@@ -4,11 +4,12 @@ import { useAuth } from "../auth";
 import { useExtensionReloaded } from "../extension";
 import { ThemeToggle } from "./ThemeToggle";
 import { Loader } from "./Loader";
+import { Logo } from "./Brand";
 
 export function RequireAuth() {
   const { account, loading } = useAuth();
   const location = useLocation();
-  if (loading) return <Loader full label="Loading Jewel Finder…" />;
+  if (loading) return <Loader full label="Loading Stock & List…" />;
   if (!account) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   return <Layout />;
 }
@@ -21,8 +22,7 @@ export function Layout({ children }: { children?: ReactNode }) {
     <div className="app">
       <header className="topbar">
         <NavLink to="/" className="brand">
-          <img src="/favicon.svg" alt="" width={22} height={22} />
-          Jewel Finder
+          <Logo size={30} />
         </NavLink>
         <nav>
           <NavLink to="/" end>
@@ -42,7 +42,7 @@ export function Layout({ children }: { children?: ReactNode }) {
       <main className="container">
         {extensionReloaded && (
           <p className="notice">
-            The Jewel Finder extension was updated. Reload this page so it can talk to the new version.{" "}
+            The Stock & List extension was updated. Reload this page so it can talk to the new version.{" "}
             <button className="link" onClick={() => location.reload()}>
               Reload
             </button>

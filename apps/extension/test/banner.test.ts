@@ -22,7 +22,7 @@ beforeAll(async () => {
 });
 beforeEach(() => banner.hideBanner());
 
-const panel = () => document.getElementById("jewel-finder-banner")!.shadowRoot!.querySelector<HTMLElement>(".box")!;
+const panel = () => document.getElementById("stock-and-list-banner")!.shadowRoot!.querySelector<HTMLElement>(".box")!;
 const header = () => panel().querySelector("header")!;
 const pointer = (type: string, x: number, y: number) =>
   header().dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, button: 0, pointerId: 1, bubbles: true }));

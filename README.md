@@ -1,4 +1,6 @@
-# Jewel Finder
+<p><img src="docs/logo.svg" alt="Stock &amp; List" height="56"></p>
+
+# Stock & List
 
 Inventory for eBay / Vinted resellers, with a Chrome extension that fills in the marketplaces'
 own listing forms, ends listings elsewhere when something sells, relists stale listings to bump them
@@ -24,9 +26,9 @@ pnpm typecheck
 ### Extension
 
 ```bash
-pnpm build:ext       # → apps/extension/dist       "Jewel Finder (dev)", talks to http://localhost:8787
-pnpm build:ext:prod  # → apps/extension/dist-prod  "Jewel Finder", talks to the deployed Worker
-pnpm release:ext     # → apps/extension/release/jewel-finder-<version>.zip (for the Chrome Web Store)
+pnpm build:ext       # → apps/extension/dist       "Stock & List (dev)", talks to http://localhost:8787
+pnpm build:ext:prod  # → apps/extension/dist-prod  "Stock & List", talks to the deployed Worker
+pnpm release:ext     # → apps/extension/release/stock-and-list-<version>.zip (for the Chrome Web Store)
 ```
 
 Accounts live on one server, so sign in with the build that matches where you signed up. The side
@@ -61,7 +63,7 @@ On Vinted:
   the extension reads the new item's id from the upload request (`content/vinted-page.ts`, in the page's
   own world).
 
-Open Jewel Finder pages (Inventory, the item, Relist) update by themselves: whenever the extension changes
+Open Stock & List pages (Inventory, the item, Relist) update by themselves: whenever the extension changes
 an item it writes that item's id to `itemsChanged` in `chrome.storage.local`, and the bridge content script
 passes it on to the page as `ITEMS_CHANGED`. Pages refetch only the changed items (batched, for imports) and
 swap them into the list in place (`mergeChangedItems`); Inventory also refreshes its counts.
@@ -137,9 +139,9 @@ whole page at a time. Sign in to the marketplace in the same browser first.
    already on that marketplace; otherwise a new tab opens on your listings: eBay Seller Hub → Active,
    or Vinted's home page, where the panel offers "Open my wardrobe" (Vinted's wardrobe URL needs your
    member id).
-2. **Pick:** a Jewel Finder panel on the page lists every listing found there, with a checkbox each and
+2. **Pick:** a Stock & List panel on the page lists every listing found there, with a checkbox each and
    **Select all on this page**. Hovering a row outlines that listing on the page. Listings already in your
-   inventory (imported before, or listed from Jewel Finder) show "✓ In Jewel Finder" and can't be picked.
+   inventory (imported before, or listed from Stock & List) show "✓ In Stock & List" and can't be picked.
    Import mode stays on in that tab while you scroll or page through. The panel warns when the page
    doesn't look like your own listings (eBay: only Seller Hub / My eBay count).
 3. **Import:** listings are read one at a time, 600 ms apart. Keep the tab open until it finishes;
@@ -238,6 +240,12 @@ and photos are not sent. 4xx responses and the 503 "not configured" response are
 
 ## Deploy
 
+The project was called Jewel Finder; the Cloudflare names stay as they were, because renaming them would
+start an empty Worker at a new address: the Worker is still `jewel-finder` (served at
+`jewel-finder.tayfun-sen.workers.dev`) and the photos bucket `jewel-finder-images`. The brand lives in
+`apps/web/public/favicon.svg` (mark) and `logo.svg` (wordmark); the extension's PNG icons are rendered from
+`apps/extension/icons/logo.svg`.
+
 ```bash
 cd apps/api
 npx wrangler r2 bucket create jewel-finder-images
@@ -253,8 +261,8 @@ pnpm build:ext:prod  # or API_URL=https://… pnpm build:ext for another deploym
 
 ## Publishing the extension
 
-`pnpm run deploy` also builds `apps/extension/release/jewel-finder-<version>.zip` (or run `pnpm release:ext`
-on its own) and serves it at `/jewel-finder-extension.zip`. Until the extension is in the Chrome Web Store,
+`pnpm run deploy` also builds `apps/extension/release/stock-and-list-<version>.zip` (or run `pnpm release:ext`
+on its own) and serves it at `/stock-and-list-extension.zip`. Until the extension is in the Chrome Web Store,
 the web app's `/extension` page offers that zip with "Load unpacked" steps.
 
 To publish it:

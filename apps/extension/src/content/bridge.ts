@@ -2,7 +2,7 @@ import { BRIDGE_EXT, BRIDGE_WEB, ITEMS_CHANGED_KEY, type ExtensionToWeb, type It
 import { extensionAlive } from "../lib/alive";
 import { send } from "../messages";
 
-// Runs on the Jewel Finder web app only. Relays window.postMessage requests to the background.
+// Runs on the Stock & List web app only. Relays window.postMessage requests to the background.
 
 function reply(msg: ExtensionToWeb) {
   window.postMessage(msg, window.location.origin);

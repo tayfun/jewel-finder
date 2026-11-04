@@ -6,6 +6,7 @@ import type { Adapter, ImportIO } from "./runner";
 import { findListingCards, type ListingCard } from "./scrape";
 import { NetworkError, fetchRetry } from "./net";
 import { extensionAlive } from "./alive";
+import { logoMark } from "./logo";
 
 // Import mode: a panel on the seller's listings page (Vinted wardrobe, eBay Seller Hub…) to pick
 // listings one by one or all at once. Each pick is read from its own listing page and sent to the
@@ -75,6 +76,7 @@ const CSS = `
     border: 1px solid #e0e4df; border-radius: 14px; box-shadow: 0 4px 10px rgb(20 30 28 / 8%), 0 18px 44px rgb(20 30 28 / 18%); }
   header { display: flex; align-items: center; gap: 8px; padding: 11px 14px; background: linear-gradient(135deg, #0b7a6c, #08574d); color: #fff;
     border-radius: 14px 14px 0 0; font-weight: 650; }
+  header .logo { flex: none; display: grid; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 25%)); }
   header .t { flex: 1; }
   header button { all: unset; cursor: pointer; padding: 0 4px; font-size: 16px; opacity: .85; }
   .min > :not(header) { display: none; }
@@ -138,7 +140,7 @@ interface Run {
 }
 
 export class ImportPanel {
-  private host = h("div", { id: "jewel-finder-import" });
+  private host = h("div", { id: "stock-and-list-import" });
   /** Closed to the page's scripts; kept on the instance for tests. */
   readonly root = this.host.attachShadow({ mode: "closed" });
   private cards: ListingCard[] = [];
@@ -255,7 +257,7 @@ export class ImportPanel {
     const header = h(
       "header",
       {},
-      h("span", {}, "💎"),
+      logoMark(),
       h("span", { class: "t" }, `Import from ${this.label}`),
       h("button", { title: "Minimise", onClick: () => ((this.minimised = !this.minimised), this.render()) }, "–"),
       h("button", { title: "Close import", onClick: () => this.close() }, "×"),
@@ -285,7 +287,7 @@ export class ImportPanel {
         "p",
         { class: "muted small" },
         `${this.cards.length} listing${this.cards.length === 1 ? "" : "s"} on this page`,
-        knownHere ? ` · ${knownHere} already in Jewel Finder` : "",
+        knownHere ? ` · ${knownHere} already in Stock & List` : "",
         ". Scroll or go to the next page for more; import mode stays on in this tab.",
       ),
     );
@@ -346,7 +348,7 @@ export class ImportPanel {
             "div",
             { class: "meta" },
             itemId
-              ? h("a", { class: "tick", href: `${API_URL}/items/${itemId}`, target: "_blank", onClick: (e) => e.stopPropagation() }, "✓ In Jewel Finder")
+              ? h("a", { class: "tick", href: `${API_URL}/items/${itemId}`, target: "_blank", onClick: (e) => e.stopPropagation() }, "✓ In Stock & List")
               : card.price,
           ),
         ),
@@ -371,7 +373,7 @@ export class ImportPanel {
         );
       } else {
         const parts = [`Imported ${run.created}`];
-        if (run.skipped) parts.push(`${run.skipped} already in Jewel Finder`);
+        if (run.skipped) parts.push(`${run.skipped} already in Stock & List`);
         if (run.failed.length) parts.push(`${run.failed.length} failed`);
         if (run.done < run.total) parts.push(`${run.total - run.done} not started`);
         footer.append(h("p", {}, h("strong", {}, parts.join(" · "))));

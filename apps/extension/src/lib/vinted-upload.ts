@@ -3,7 +3,7 @@
 // upload request itself. A script in the page's own world watches for it and posts it to the content script.
 
 /** The window message the page script sends; the content script only trusts it from its own window. */
-export const UPLOADED_MESSAGE = "jewel-finder:vinted-item-uploaded";
+export const UPLOADED_MESSAGE = "stock-and-list:vinted-item-uploaded";
 
 export interface UploadedMessage {
   type: typeof UPLOADED_MESSAGE;

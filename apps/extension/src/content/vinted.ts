@@ -346,7 +346,7 @@ export const vinted: Adapter = {
   delist: {
     async step(ctx) {
       const listing = targetOf(ctx);
-      const after = "Jewel Finder updates your inventory once it's gone.";
+      const after = "Stock & List updates your inventory once it's gone.";
       if (parseListingUrl("vinted", location.href)?.externalId !== listing?.externalId) {
         return `Open the listing (${listing?.url ?? "on Vinted"}) and delete it. ${after}`;
       }
