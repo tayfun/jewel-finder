@@ -82,17 +82,16 @@ export function vintedPackageSize(item: { packageSize: PackageSize | null; weigh
 export interface VintedCategory {
   name: string;
   parent: string;
-  /** Nothing said which: a book filed under Fiction by default. */
-  guessed?: boolean;
+  /** Set when it's a guess rather than from the item's own category: why, for the seller to check. */
+  guess?: string;
 }
 
 const BOOKS = "Books & Media > Books";
-const has = (re: RegExp, ...texts: string[]) => texts.some((t) => re.test(t));
 
 /**
  * Where an item goes on Vinted, from our category (usually an eBay path like "Media › Books, Comics &
- * Magazines › Books") and the title/tags. Only books, comics and magazines for now. A book that doesn't say
- * whether it's fiction goes under Fiction, marked as a guess (most of what we sell that way are novels).
+ * Magazines › Books") and the title/tags. Only books, comics and magazines for now. Going by a word in the
+ * title, or Fiction for a book that says nothing either way (most of those we sell are novels), is a guess.
  */
 export function vintedCategory(item: Pick<Item, "category" | "title" | "tags" | "book">): VintedCategory | null {
   const path = item.category.toLowerCase();
@@ -101,37 +100,49 @@ export function vintedCategory(item: Pick<Item, "category" | "title" | "tags" | 
   const words = [item.title, ...item.tags].join(" ").toLowerCase();
   if (!item.book && !has(/\b(books?|magazines?|comics?|manga|graphic novels?)\b/, path)) return null;
 
-  if (has(/\bmagazines?\b/, category)) return { name: "Magazines", parent: "Books & Media" };
-  if (has(/\b(comics?|manga|graphic novels?)\b/, category, words)) return { name: "Comics, manga & graphic novels", parent: BOOKS };
-  if (has(/\b(text ?books?|study guides?|revision)\b/, category, words)) return { name: "Textbooks & study materials", parent: BOOKS };
-  if (has(/\b(colou?ring|puzzle|activity) books?\b/, category, words)) return { name: "Colouring, puzzle & activity books", parent: BOOKS };
-  if (has(/\b(young adults?|ya|teen)\b/, category)) return { name: "Young adults", parent: `${BOOKS} > Kids & young adults` };
-  if (has(/\b(children'?s|kids)\b/, category)) return { name: "Kids", parent: `${BOOKS} > Kids & young adults` };
-
-  if (has(/\bnon-?fiction\b/, category, words)) return { name: "Non-fiction", parent: BOOKS };
-  if (has(/\bfiction\b/, category) || has(/\bscience fiction\b/, words)) return { name: "Fiction", parent: BOOKS };
-  const fiction = has(/\b(novels?|fiction|poems|poetry|plays|short stories|thriller|crime|mystery|fantasy|sci-?fi|romance)\b/, words);
-  const nonFiction = has(
-    /\b(guides?|history|biography|memoir|cook ?book|recipes?|dictionary|handbook|introduction|vsi|essays|science|philosophy|travel|atlas)\b/,
-    words,
+  // From our category, or else a guess from the title naming the word that decided it.
+  const match = (re: RegExp, name: string, parent = BOOKS, useWords = true): VintedCategory | null => {
+    if (re.test(category)) return { name, parent };
+    const word = useWords ? words.match(re)?.[0] : undefined;
+    return word ? { name, parent, guess: `"${word}" in the title` } : null;
+  };
+  return (
+    match(/\bmagazines?\b/, "Magazines", "Books & Media", false) ??
+    match(/\b(comics?|manga|graphic novels?)\b/, "Comics, manga & graphic novels") ??
+    match(/\b(text ?books?|study guides?|revision)\b/, "Textbooks & study materials") ??
+    match(/\b(colou?ring|puzzle|activity) books?\b/, "Colouring, puzzle & activity books") ??
+    match(/\b(young adults?|ya|teen)\b/, "Young adults", `${BOOKS} > Kids & young adults`, false) ??
+    match(/\b(children'?s|kids)\b/, "Kids", `${BOOKS} > Kids & young adults`, false) ??
+    match(/\bnon-?fiction\b/, "Non-fiction") ??
+    match(/\b(science )?fiction\b/, "Fiction") ??
+    fictionFromWords(words) ?? { name: "Fiction", parent: BOOKS, guess: "nothing in the title says fiction or non-fiction" }
   );
-  if (fiction !== nonFiction) return { name: fiction ? "Fiction" : "Non-fiction", parent: BOOKS };
-  return { name: "Fiction", parent: BOOKS, guessed: true };
 }
+
+function fictionFromWords(words: string): VintedCategory | null {
+  const fiction = words.match(/\b(novels?|poems|poetry|plays|short stories|thriller|crime|mystery|fantasy|sci-?fi|romance)\b/)?.[0];
+  const nonFiction = words.match(
+    /\b(guides?|history|biography|memoir|cook ?book|recipes?|dictionary|handbook|introduction|vsi|essays|science|philosophy|travel|atlas)\b/,
+  )?.[0];
+  if (!fiction === !nonFiction) return null; // neither, or both
+  return { name: fiction ? "Fiction" : "Non-fiction", parent: BOOKS, guess: `"${fiction ?? nonFiction}" in the title` };
+}
+
+const has = (re: RegExp, ...texts: string[]) => texts.some((t) => re.test(t));
 
 const LANGUAGES = ["English", "Turkish", "French", "German", "Spanish", "Italian", "Portuguese", "Dutch", "Russian", "Greek", "Polish", "Arabic", "Japanese", "Chinese"];
 
 /**
- * A book's language: the one saved with it, else a language named in the title or tags ("… Turkish"), else
- * Turkish when the title uses Turkish letters, else English.
+ * A book's language: the one saved with it, else a guess: a language named in the title or tags ("… Turkish"),
+ * else Turkish when the title uses Turkish letters, else English. `guess` says why when it's a guess.
  */
-export function bookLanguage(item: Pick<Item, "title" | "tags" | "book">): string {
-  if (item.book?.language) return item.book.language;
+export function bookLanguage(item: Pick<Item, "title" | "tags" | "book">): { language: string; guess?: string } {
+  if (item.book?.language) return { language: item.book.language };
   const words = [item.title, ...item.tags].join(" ");
   const named = LANGUAGES.find((l) => new RegExp(`\\b${l}\\b`, "i").test(words));
-  if (named) return named;
-  if (/[şŞğĞıİ]/.test(item.title)) return "Turkish";
-  return "English";
+  if (named) return { language: named, guess: `"${named}" in the title` };
+  if (/[şŞğĞıİ]/.test(item.title)) return { language: "Turkish", guess: "Turkish letters in the title" };
+  return { language: "English", guess: "none saved, so the default" };
 }
 
 /** What to put in Vinted's ISBN box when we don't have one: accepted as valid, matches no book. */

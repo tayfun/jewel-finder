@@ -25,6 +25,10 @@ const CSS = `
   .ok::before { content: "✓"; color: #0f766e; font-weight: 700; }
   .todo::before { content: "•"; color: #b54708; font-weight: 700; }
   .warn { color: #b42318; }
+  .guess { color: #b42318; }
+  .guess::before { content: "⚠"; font-weight: 700; }
+  .guess .why { color: #b42318; opacity: .8; font-size: 12px; }
+  h4.guess-h { color: #b42318; }
   .val { color: #69707a; }
   .copy { all: unset; cursor: pointer; color: #0f766e; margin-left: auto; font-size: 12px; }
   .footer { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-top: 1px solid #e2e5e9; }
@@ -160,10 +164,22 @@ export function showBanner(state: BannerState) {
 
   const body = el("div", { class: "body" });
   if (state.kind === "filled") {
-    const { filled, manual, warnings } = state.report;
+    const { filled, manual, warnings, guessed = [] } = state.report;
     body.append(
       el("p", { class: "msg" }, "Check everything, finish the fields below, then press the site's own upload/list button."),
     );
+    if (guessed.length) {
+      body.append(
+        el("h4", { class: "guess-h" }, "Guessed: please check"),
+        el(
+          "ul",
+          {},
+          ...guessed.map(({ field, value, why }) =>
+            el("li", { class: "guess" }, el("span", {}, `${field}: `, el("b", {}, value), " ", el("span", { class: "why" }, `(${why})`))),
+          ),
+        ),
+      );
+    }
     if (filled.length) body.append(el("h4", {}, "Filled in"), el("ul", {}, ...filled.map((f) => el("li", { class: "ok" }, f))));
     if (manual.length) {
       body.append(
@@ -171,10 +187,12 @@ export function showBanner(state: BannerState) {
         el(
           "ul",
           {},
-          ...manual.map(({ field, value }) => {
+          ...manual.map(({ field, value, guess }) => {
             const copy = el("button", { class: "copy" }, "copy");
             copy.onclick = () => void navigator.clipboard.writeText(value).then(() => (copy.textContent = "copied"));
-            return el("li", { class: "todo" }, el("span", {}, `${field}: `, el("span", { class: "val" }, value || "—")), ...(value ? [copy] : []));
+            const text = el("span", {}, `${field}: `, el("span", { class: guess ? "" : "val" }, value || "—"));
+            if (guess) text.append(" ", el("span", { class: "why" }, `(guess: ${guess})`));
+            return el("li", { class: guess ? "guess" : "todo" }, text, ...(value ? [copy] : []));
           }),
         ),
       );

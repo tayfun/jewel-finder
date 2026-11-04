@@ -153,9 +153,10 @@ describe("vinted adapter: books", () => {
     };
     const report = await vinted.fill({ ...ctx("vinted"), item: book }, []);
     expect(trigger.textContent).toBe("Fiction");
-    expect(report.filled).toContain("Category (Fiction)");
+    // "novel" in the tags decided it: a guess, shown in red.
+    expect(report.guessed).toContainEqual({ field: "Category", value: "Fiction", why: '"novel" in the title' });
     expect(document.querySelector<HTMLInputElement>('[data-testid="isbn--input"]')!.value).toBe("9780099740919");
-    expect(report.filled).toContain("Parcel size (Small)");
+    expect(report.guessed).toContainEqual({ field: "Parcel size", value: "Small", why: "no package size saved, so the default" });
     expect([1, 2, 3].map((i) => (document.getElementById(`p${i}`) as HTMLInputElement).checked)).toEqual([true, false, false]);
   }, 15_000);
 });
@@ -212,8 +213,12 @@ describe("vinted adapter: ISBN", () => {
       [],
     );
     expect(document.querySelector<HTMLInputElement>('[data-testid="isbn--input"]')!.value).toBe("0000000000000");
-    expect(report.filled).toContain("ISBN (none saved, so 0000000000000)");
-    expect(report.manual).toContainEqual({ field: "Language", value: "Turkish" });
+    expect(report.guessed).toContainEqual({
+      field: "ISBN",
+      value: "0000000000000",
+      why: "none saved; Vinted accepts this one and shows Language",
+    });
+    expect(report.manual).toContainEqual({ field: "Language", value: "Turkish", guess: "Turkish letters in the title" });
   }, 15_000);
 });
 

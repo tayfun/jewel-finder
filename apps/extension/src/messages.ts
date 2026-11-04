@@ -30,8 +30,10 @@ export interface ImageFile {
 /** What a content script managed to fill in, shown in the on-page banner. */
 export interface FillReport {
   filled: string[];
-  /** Fields the user still needs to set by hand, with the value to use. */
-  manual: { field: string; value: string }[];
+  /** Filled in with a guess or a default rather than the item's own data: shown in red, to check. */
+  guessed?: { field: string; value: string; why: string }[];
+  /** Fields the user still needs to set by hand, with the value to use (`guess`: why, if it's a guess). */
+  manual: { field: string; value: string; guess?: string }[];
   warnings: string[];
 }
 

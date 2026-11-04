@@ -176,30 +176,37 @@ describe("staleness", () => {
 
 describe("vintedCategory", () => {
   const books = "Media › Books, Comics & Magazines › Books";
-  const cat = (title: string, category = books, extra: { tags?: string[]; book?: boolean } = {}) =>
-    vintedCategory({ title, category, tags: extra.tags ?? [], book: extra.book ? ({} as never) : null })?.name ?? null;
+  const vc = (title: string, category = books, extra: { tags?: string[]; book?: boolean } = {}) =>
+    vintedCategory({ title, category, tags: extra.tags ?? [], book: extra.book ? ({} as never) : null });
+  const cat = (...args: Parameters<typeof vc>) => vc(...args)?.name ?? null;
 
-  it("files books by what the title and tags say", () => {
-    expect(cat("Connell Guides The Connell Guide to King Lear PB 2018")).toBe("Non-fiction");
+  it("files books by what the title and tags say, as a guess naming the word", () => {
+    expect(vc("Connell Guides The Connell Guide to King Lear PB 2018")).toEqual({
+      name: "Non-fiction",
+      parent: "Books & Media > Books",
+      guess: '"guides" in the title',
+    });
     expect(cat("Oxford University Press Thought: VSI Tim Bayne PB 2013")).toBe("Non-fiction");
     expect(cat("Oxford Student Texts W. B. Yeats Selected Poems OUP 2011")).toBe("Fiction");
-    expect(cat("Margaret Atwood The Handmaid's Tale", books, { tags: ["novel", "dystopia"] })).toBe("Fiction");
+    expect(vc("Margaret Atwood The Handmaid's Tale", books, { tags: ["novel", "dystopia"] })?.guess).toBe('"novel" in the title');
     expect(cat("Isaac Asimov Foundation science fiction PB")).toBe("Fiction");
   });
 
   it("files a book it can't place under Fiction, as a guess", () => {
-    const guess = (title: string) => vintedCategory({ title, category: books, tags: [], book: null });
-    expect(guess("Erkekler Ve Kadınlar - Giroud & Lévy")).toEqual({ name: "Fiction", parent: "Books & Media > Books", guessed: true });
-    expect(guess("A novel guide")).toMatchObject({ name: "Fiction", guessed: true });
-    expect(guess("Margaret Atwood novel")?.guessed).toBeUndefined();
+    expect(vc("Erkekler Ve Kadınlar - Giroud & Lévy")).toEqual({
+      name: "Fiction",
+      parent: "Books & Media > Books",
+      guess: "nothing in the title says fiction or non-fiction",
+    });
+    expect(vc("A novel guide")?.guess).toMatch(/^nothing/);
   });
 
-  it("uses the category for comics, magazines, textbooks and children's books", () => {
-    expect(cat("Asterix", "Media › Books, Comics & Magazines › Comic Books & Memorabilia › Comics")).toBe("Comics, manga & graphic novels");
-    expect(vintedCategory({ title: "Wired", category: "Media › Books, Comics & Magazines › Magazines", tags: [], book: null })).toEqual({
-      name: "Magazines",
-      parent: "Books & Media",
+  it("goes by the item's category for comics, magazines, textbooks and children's books, not as a guess", () => {
+    expect(vc("Asterix", "Media › Books, Comics & Magazines › Comic Books & Memorabilia › Comics")).toEqual({
+      name: "Comics, manga & graphic novels",
+      parent: "Books & Media > Books",
     });
+    expect(vc("Wired", "Media › Books, Comics & Magazines › Magazines")).toEqual({ name: "Magazines", parent: "Books & Media" });
     expect(cat("GCSE Maths", "Media › Books, Comics & Magazines › Textbooks, Education & Reference › School Textbooks & Study Guides")).toBe(
       "Textbooks & study materials",
     );
@@ -215,12 +222,18 @@ describe("vintedCategory", () => {
 describe("bookLanguage", () => {
   const lang = (title: string, language = "", tags: string[] = []) =>
     bookLanguage({ title, tags, book: language ? ({ language } as never) : null });
-  it("uses the saved language, then the title, then Turkish letters, else English", () => {
-    expect(lang("Anything", "French")).toBe("French");
-    expect(lang("Elif Şafak Baba ve Piç Doğan Kitap Paperback 82. Baskı 2010 Turkish")).toBe("Turkish");
-    expect(lang("William Shakespeare Fırtına Can Yücel Çeviri PB İş Bankası")).toBe("Turkish");
-    expect(lang("Margaret Atwood The Handmaid's Tale PB Vintage 1996 English Dystopia")).toBe("English");
-    expect(lang("Le Petit Prince", "", ["french"])).toBe("French");
-    expect(lang("Roald Dahl The Witches PB Puffin")).toBe("English");
+  it("uses the saved language, else guesses from the title or Turkish letters, else English", () => {
+    expect(lang("Anything", "French")).toEqual({ language: "French" });
+    expect(lang("Elif Şafak Baba ve Piç Doğan Kitap Paperback 82. Baskı 2010 Turkish")).toEqual({
+      language: "Turkish",
+      guess: '"Turkish" in the title',
+    });
+    expect(lang("William Shakespeare Fırtına Can Yücel Çeviri PB İş Bankası")).toEqual({
+      language: "Turkish",
+      guess: "Turkish letters in the title",
+    });
+    expect(lang("Margaret Atwood The Handmaid's Tale PB Vintage 1996 English Dystopia").language).toBe("English");
+    expect(lang("Le Petit Prince", "", ["french"]).language).toBe("French");
+    expect(lang("Roald Dahl The Witches PB Puffin")).toEqual({ language: "English", guess: "none saved, so the default" });
   });
 });

@@ -381,7 +381,12 @@ export const vinted: Adapter = {
 
   async fill({ item }, photos): Promise<FillReport> {
     stopVintedWatchers();
-    const report: FillReport = { filled: [], manual: [], warnings: [] };
+    const report: FillReport = { filled: [], guessed: [], manual: [], warnings: [] };
+    // A value we made up goes under "Guessed" (red in the panel) instead of "Filled in".
+    const filled = (field: string, value: string, guess?: string) => {
+      if (guess) report.guessed!.push({ field, value, why: guess });
+      else report.filled.push(`${field} (${value})`);
+    };
     const title = await waitFor(() => findField(FIELDS.title), 15_000);
     if (!title) throw new Error("Couldn't find Vinted's upload form. Are you signed in to Vinted?");
 
@@ -407,10 +412,9 @@ export const vinted: Adapter = {
 
     // Category comes before brand/size/condition on Vinted and unlocks them.
     const category = vintedCategory(item);
-    if (category && (await pickCategory(category))) {
-      report.filled.push(`Category (${category.name}${category.guessed ? ": a guess, change it if it's non-fiction" : ""})`);
-    }
-    else report.manual.push({ field: "Category", value: category ? `${category.parent} > ${category.name}` : item.category });
+    if (category && (await pickCategory(category))) filled("Category", category.name, category.guess);
+    else if (category) report.manual.push({ field: "Category", value: `${category.parent} > ${category.name}`, guess: category.guess });
+    else report.manual.push({ field: "Category", value: item.category });
 
     // Book categories have an ISBN box. Without an ISBN we put Vinted's "valid but unknown" one, which still
     // brings up the Language field (a real ISBN fills author, title and language from Vinted's records).
@@ -419,7 +423,8 @@ export const vinted: Adapter = {
     if (isbn) {
       const isbnValue = item.book?.isbn || VINTED_NO_ISBN;
       setValue(isbn, isbnValue);
-      report.filled.push(isbnValue === VINTED_NO_ISBN ? "ISBN (none saved, so 0000000000000)" : "ISBN");
+      if (isbnValue === VINTED_NO_ISBN) filled("ISBN", isbnValue, "none saved; Vinted accepts this one and shows Language");
+      else report.filled.push("ISBN");
       // The lookup re-renders the book fields; let it finish before picking from them.
       await waitFor(() => findField(FIELDS.language), 4000);
       await sleep(300);
@@ -442,10 +447,11 @@ export const vinted: Adapter = {
     if (item.colour) report.manual.push({ field: "Colour", value: item.colour });
 
     // Any book: when the field isn't there yet (category picked by hand) it goes on the to-do list.
-    const languageValue = isBook || item.book || category?.parent.startsWith("Books") ? bookLanguage(item) : "";
+    const lang = isBook || item.book || category?.parent.startsWith("Books") ? bookLanguage(item) : null;
+    const languageValue = lang?.language ?? "";
     const language = languageValue ? findField(FIELDS.language) : null;
-    if (language && (await pickOption(language, languageValue))) report.filled.push(`Language (${languageValue})`);
-    else if (languageValue) report.manual.push({ field: "Language", value: languageValue });
+    if (language && (await pickOption(language, languageValue))) filled("Language", languageValue, lang?.guess);
+    else if (languageValue) report.manual.push({ field: "Language", value: languageValue, guess: lang?.guess });
     if (languageValue) keepSelected(FIELDS.language, languageValue);
 
     const price = findField(FIELDS.price);
@@ -457,13 +463,19 @@ export const vinted: Adapter = {
     }
 
     // Most of what we sell is books, which fit Small; Vinted's own "Recommended" is often Medium.
-    const packageSize = vintedPackageSize(item) ?? "small";
+    const sized = vintedPackageSize(item);
+    const packageSize = sized ?? "small";
+    const sizeGuess = sized ? undefined : "no package size saved, so the default";
     if (await waitFor(() => (selectPackageSize(packageSize) ? true : null), 1500)) {
-      report.filled.push(`Parcel size (${VINTED_PACKAGE_LABELS[packageSize]})`);
+      filled("Parcel size", VINTED_PACKAGE_LABELS[packageSize], sizeGuess);
     } else {
       // The sizes only appear once a category is picked; if the seller does that by hand, keep watching.
       watch(() => selectPackageSize(packageSize), 1000, 10 * 60_000);
-      report.manual.push({ field: "Parcel size", value: `${VINTED_PACKAGE_LABELS[packageSize]} (picked for you once the sizes appear)` });
+      report.manual.push({
+        field: "Parcel size",
+        value: `${VINTED_PACKAGE_LABELS[packageSize]} (picked for you once the sizes appear)`,
+        guess: sizeGuess,
+      });
     }
     return report;
   },

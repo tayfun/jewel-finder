@@ -53,6 +53,10 @@ On Vinted:
   that Vinted shows its Language field. Language is the saved one, else named in the title or tags, else
   Turkish for Turkish letters in the title, else English (`bookLanguage`).
 - **Parcel size:** Small unless the item's own package size or weight says bigger.
+- **Guesses stand out:** anything filled from a guess or a default rather than the item's own data
+  (category from a title word or the Fiction default, the zeros ISBN, a language not saved on the item,
+  Small with no package size saved) is listed under "Guessed: please check" in red in the on-page panel,
+  with the reason.
 - **Recording the listing:** Vinted stays on your profile after Upload instead of opening the new item, so
   the extension reads the new item's id from the upload request (`content/vinted-page.ts`, in the page's
   own world).

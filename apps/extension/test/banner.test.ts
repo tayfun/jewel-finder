@@ -62,4 +62,27 @@ describe("banner", () => {
     expect(panel().style.left).toBe("");
     await vi.waitFor(() => expect(store.bannerPos).toBeNull());
   });
+
+  it("shows guesses and defaults in their own red section, and guessed to-dos in red", () => {
+    banner.showBanner({
+      kind: "filled",
+      title: "Vinted: a book",
+      report: {
+        filled: ["Title"],
+        guessed: [{ field: "ISBN", value: "0000000000000", why: "none saved" }],
+        manual: [
+          { field: "Language", value: "Turkish", guess: "Turkish letters in the title" },
+          { field: "Colour", value: "Blue" },
+        ],
+        warnings: [],
+      },
+    });
+    const box = panel();
+    const heading = [...box.querySelectorAll("h4")].map((h) => h.textContent);
+    expect(heading[0]).toBe("Guessed: please check");
+    const guesses = [...box.querySelectorAll("li.guess")].map((li) => li.textContent);
+    expect(guesses[0]).toContain("ISBN: 0000000000000 (none saved)");
+    expect(guesses[1]).toContain("Language: Turkish (guess: Turkish letters in the title)");
+    expect(box.querySelectorAll("li.todo")).toHaveLength(1); // Colour, from the item's own data
+  });
 });
