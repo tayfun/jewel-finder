@@ -3,6 +3,7 @@ import { send, type FillReport, type JobContext, type ScrapedListing } from "../
 import { setCancelHandler, showBanner } from "./banner";
 import { runComps } from "./comps";
 import { dataUrlToFile } from "./dom";
+import { extensionAlive } from "./alive";
 
 export interface Published {
   url: string;
@@ -173,7 +174,7 @@ export async function run(adapter: Adapter): Promise<void> {
   void handle();
   // Marketplaces are SPAs: watch for client-side navigation as well as full loads.
   const timer = setInterval(() => {
-    if (finished) clearInterval(timer);
+    if (finished || !extensionAlive()) clearInterval(timer); // done, or left over from an old version
     else void handle();
   }, 700);
 }
@@ -233,7 +234,7 @@ async function runDelist(adapter: Adapter, ctx: JobContext): Promise<void> {
 
   void handle();
   const timer = setInterval(() => {
-    if (finished) clearInterval(timer);
+    if (finished || !extensionAlive()) clearInterval(timer); // done, or left over from an old version
     else void handle();
   }, 700);
 }

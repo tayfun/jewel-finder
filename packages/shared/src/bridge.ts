@@ -58,7 +58,12 @@ export type ExtensionToWeb =
   /** Reply to LIST_ITEM, DELIST_ITEM, RELIST_ITEM and IMPORT_LISTINGS (one name for all keeps older builds compatible). */
   | { source: typeof BRIDGE_EXT; type: "LIST_RESULT"; requestId: string; ok: boolean; error?: string }
   /** The extension changed this item (a listing recorded, ended or cancelled, a price set, an import): open pages refetch it. */
-  | { source: typeof BRIDGE_EXT; type: "ITEMS_CHANGED"; itemId: string };
+  | { source: typeof BRIDGE_EXT; type: "ITEMS_CHANGED"; itemId: string }
+  /**
+   * This page's copy of the extension was replaced (reloaded or updated): the page has to be reloaded to
+   * talk to the new one, since Chrome doesn't add the new content script to tabs that are already open.
+   */
+  | { source: typeof BRIDGE_EXT; type: "EXTENSION_RELOADED" };
 
 /** chrome.storage.local key the extension's background bumps when it changes items; the bridge relays it. */
 export const ITEMS_CHANGED_KEY = "itemsChanged";

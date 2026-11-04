@@ -5,6 +5,7 @@ import { sleep } from "./dom";
 import type { Adapter, ImportIO } from "./runner";
 import { findListingCards, type ListingCard } from "./scrape";
 import { NetworkError, fetchRetry } from "./net";
+import { extensionAlive } from "./alive";
 
 // Import mode: a panel on the seller's listings page (Vinted wardrobe, eBay Seller Hub…) to pick
 // listings one by one or all at once. Each pick is read from its own listing page and sent to the
@@ -169,7 +170,10 @@ export class ImportPanel {
     }
     this.render();
     // Pages load more listings as you scroll, and marketplaces navigate client-side.
-    this.timer = setInterval(() => this.scan(), 1500);
+    this.timer = setInterval(() => {
+      if (extensionAlive()) this.scan();
+      else clearInterval(this.timer); // left over from an old version of the extension
+    }, 1500);
   }
 
   /** Re-reads the listings on the page; re-renders only when they changed. */

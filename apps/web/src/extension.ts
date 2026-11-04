@@ -58,6 +58,13 @@ export function useItemChanges(onChanged: (ids: string[]) => void, waitMs = 500,
   }, [waitMs, maxWaitMs]);
 }
 
+/** True once the extension has said this page is talking to a replaced copy of it (reload needed). */
+export function useExtensionReloaded(): boolean {
+  const [reloaded, setReloaded] = useState(false);
+  useEffect(() => onMessage((msg) => msg.type === "EXTENSION_RELOADED" && setReloaded(true)), []);
+  return reloaded;
+}
+
 /** null while checking, then the extension version or false if it isn't installed. */
 export function useExtension(): string | false | null {
   const [version, setVersion] = useState<string | false | null>(null);

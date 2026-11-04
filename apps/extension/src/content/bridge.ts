@@ -1,4 +1,5 @@
 import { BRIDGE_EXT, BRIDGE_WEB, ITEMS_CHANGED_KEY, type ExtensionToWeb, type ItemsChanged, type WebToExtension } from "@jf/shared";
+import { extensionAlive } from "../lib/alive";
 import { send } from "../messages";
 
 // Runs on the Jewel Finder web app only. Relays window.postMessage requests to the background.
@@ -7,8 +8,14 @@ function reply(msg: ExtensionToWeb) {
   window.postMessage(msg, window.location.origin);
 }
 
-window.addEventListener("message", (e: MessageEvent<WebToExtension>) => {
+function onPageMessage(e: MessageEvent<WebToExtension>) {
   if (e.source !== window || e.origin !== window.location.origin || e.data?.source !== BRIDGE_WEB) return;
+  // Left over from before the extension was reloaded: step aside and let the page ask for a reload.
+  if (!extensionAlive()) {
+    window.removeEventListener("message", onPageMessage);
+    reply({ source: BRIDGE_EXT, type: "EXTENSION_RELOADED" });
+    return;
+  }
   const msg = e.data;
   if (msg.type === "PING") {
     reply({ source: BRIDGE_EXT, type: "PONG", version: chrome.runtime.getManifest().version });
@@ -38,7 +45,8 @@ window.addEventListener("message", (e: MessageEvent<WebToExtension>) => {
       (err: Error) => reply({ source: BRIDGE_EXT, type: "LIST_RESULT", requestId: msg.requestId, ok: false, error: err.message }),
     );
   }
-});
+}
+window.addEventListener("message", onPageMessage);
 
 // The background bumps this key whenever it changes items, so open pages can reload.
 chrome.storage.onChanged.addListener((changes, area) => {
