@@ -1,7 +1,8 @@
-import { CONDITION_LABELS, MARKETPLACE_LABELS, formatMoney, type DismissedPair, type DuplicatePair, type ItemWithListings } from "@jf/shared";
-import { useState } from "react";
+import { CONDITION_LABELS, MARKETPLACE_LABELS, formatMoney, type DismissedPair, type Marketplace, type DuplicatePair, type ItemWithListings } from "@jf/shared";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { api } from "../api";
+import { delistViaExtension, useExtension, useItemChanges } from "../extension";
 import { useAccount } from "../auth";
 import { ListingBadges, StatusBadge } from "../components/Badges";
 import { useLoad } from "../hooks";
@@ -11,6 +12,11 @@ export function Duplicates() {
   const pairs = useLoad(() => api<{ pairs: DuplicatePair[] }>("/api/duplicates").then((r) => r.pairs), []);
   const dismissed = useLoad(() => api<{ pairs: DismissedPair[] }>("/api/duplicates/dismissed").then((r) => r.pairs), []);
   const [busy, setBusy] = useState("");
+  const extension = useExtension();
+  // Ending a listing through the extension finishes in another tab; pick the result up when it lands.
+  useItemChanges((ids) => {
+    if (pairs.data?.some((p) => ids.includes(p.a.id) || ids.includes(p.b.id))) void pairs.reload();
+  });
   // Errors are shown next to the pair they're about, not at the top of a long page.
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [merged, setMerged] = useState(0);
@@ -40,6 +46,14 @@ export function Duplicates() {
       await api(`/api/items/${keepItem.id}/merge`, { json: { otherId: drop.id } });
       setMerged((n) => n + 1);
       setJustDismissed(null);
+    });
+  }
+
+  /** One of a "listed twice" pair: end its listing on that site (via the extension), or record that it's ended. */
+  function endListing(pair: DuplicatePair, item: ItemWithListings, m: Marketplace, how: "extension" | "done") {
+    return act(pairKey(pair), async () => {
+      if (how === "extension") await delistViaExtension(item.id, m);
+      else await api(`/api/items/${item.id}/listings/${m}`, { method: "PUT", json: { status: "ended" } });
     });
   }
 
@@ -114,8 +128,8 @@ export function Duplicates() {
               </div>
               {twiceOn && (
                 <p className="notice small dup-twice-note">
-                  Both have a live {twiceOn} listing. If it's one item, either could sell, so it could sell twice: open the one
-                  to drop and end its {twiceOn} listing, then merge them here. If you have two copies, mark them as not
+                  Both have a live {twiceOn} listing. If it's one item, either could sell, so it could sell twice: end the
+                  listing on the one you'll drop (below), then merge them. If you have two copies, mark them as not
                   duplicates.
                 </p>
               )}
@@ -130,7 +144,33 @@ export function Duplicates() {
                     disabled={!!busy}
                     mergeBlocked={twiceOn ? `End one of the ${twiceOn} listings first: an item holds one listing per site` : undefined}
                     onMerge={() => merge(pair, item!, other!)}
-                  />
+                  >
+                    {pair.listedTwiceOn?.map((m) => {
+                      const listing = item!.listings.find((l) => l.marketplace === m);
+                      const site = MARKETPLACE_LABELS[m];
+                      return (
+                        <div key={m} className="dup-end">
+                          <button
+                            className="small"
+                            disabled={!!busy || !extension || !listing?.url}
+                            title={
+                              !listing?.url
+                                ? `No ${site} link saved: end it on ${site}, then press “I've ended it”`
+                                : !extension
+                                  ? "Extension not detected"
+                                  : `Open this ${site} listing to end it; Jewel Finder records it when it's gone`
+                            }
+                            onClick={() => endListing(pair, item!, m, "extension")}
+                          >
+                            End this {site} listing
+                          </button>
+                          <button className="small" disabled={!!busy} onClick={() => endListing(pair, item!, m, "done")}>
+                            I've ended it
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </DupItem>
                 ))}
               </div>
               {errors[key] && <p className="error">{errors[key]}</p>}
@@ -181,12 +221,14 @@ function DupItem({
   disabled,
   mergeBlocked,
   onMerge,
+  children,
 }: {
   item: ItemWithListings;
   disabled: boolean;
   /** Why merging isn't possible yet, if it isn't. */
   mergeBlocked?: string;
   onMerge: () => void;
+  children?: ReactNode;
 }) {
   const { settings } = useAccount();
   const details = [
@@ -222,6 +264,7 @@ function DupItem({
         >
           Merge into this one
         </button>
+        {children}
       </div>
     </div>
   );

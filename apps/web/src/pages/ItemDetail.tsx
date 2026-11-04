@@ -504,6 +504,26 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
                     {busy === m ? "Opening…" : "↻ Relist"}
                   </button>
                 )}
+                {l?.status === "listed" && (
+                  <>
+                    <button
+                      disabled={!!busy || !extension || !l.url}
+                      title={
+                        !l.url
+                          ? "No listing link saved: end it on the site, then press “I've ended it”"
+                          : !extension
+                            ? "Extension not detected"
+                            : `Open the listing on ${MARKETPLACE_LABELS[m]} to end it (e.g. it's listed twice)`
+                      }
+                      onClick={() => delist(m)}
+                    >
+                      End listing
+                    </button>
+                    <button title={`You ended it on ${MARKETPLACE_LABELS[m]} yourself: mark it ended here`} onClick={() => markEnded(m)}>
+                      I've ended it
+                    </button>
+                  </>
+                )}
                 {canList && (
                   <button
                     className="primary"
