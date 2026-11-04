@@ -1090,3 +1090,9 @@ label.ai-filled input, label.ai-filled select, label.ai-filled textarea { border
   .import-callout { grid-template-columns: auto minmax(0, 1fr); }
   .import-callout .button { grid-column: 1 / -1; }
 }
+
+/* In-page links (Features, How it works…) glide instead of jumping, and stop clear of the sticky header. */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+.landing [id] { scroll-margin-top: 110px; }
