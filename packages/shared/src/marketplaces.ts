@@ -82,6 +82,8 @@ export function vintedPackageSize(item: { packageSize: PackageSize | null; weigh
 export interface VintedCategory {
   name: string;
   parent: string;
+  /** Nothing said which: a book filed under Fiction by default. */
+  guessed?: boolean;
 }
 
 const BOOKS = "Books & Media > Books";
@@ -90,7 +92,7 @@ const has = (re: RegExp, ...texts: string[]) => texts.some((t) => re.test(t));
 /**
  * Where an item goes on Vinted, from our category (usually an eBay path like "Media › Books, Comics &
  * Magazines › Books") and the title/tags. Only books, comics and magazines for now. A book that doesn't say
- * whether it's fiction gives null: the seller picks, rather than us filing a novel under Non-fiction.
+ * whether it's fiction goes under Fiction, marked as a guess (most of what we sell that way are novels).
  */
 export function vintedCategory(item: Pick<Item, "category" | "title" | "tags" | "book">): VintedCategory | null {
   const path = item.category.toLowerCase();
@@ -114,7 +116,7 @@ export function vintedCategory(item: Pick<Item, "category" | "title" | "tags" | 
     words,
   );
   if (fiction !== nonFiction) return { name: fiction ? "Fiction" : "Non-fiction", parent: BOOKS };
-  return null;
+  return { name: "Fiction", parent: BOOKS, guessed: true };
 }
 
 const LANGUAGES = ["English", "Turkish", "French", "German", "Spanish", "Italian", "Portuguese", "Dutch", "Russian", "Greek", "Polish", "Arabic", "Japanese", "Chinese"];

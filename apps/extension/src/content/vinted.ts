@@ -407,7 +407,9 @@ export const vinted: Adapter = {
 
     // Category comes before brand/size/condition on Vinted and unlocks them.
     const category = vintedCategory(item);
-    if (category && (await pickCategory(category))) report.filled.push(`Category (${category.name})`);
+    if (category && (await pickCategory(category))) {
+      report.filled.push(`Category (${category.name}${category.guessed ? ": a guess, change it if it's non-fiction" : ""})`);
+    }
     else report.manual.push({ field: "Category", value: category ? `${category.parent} > ${category.name}` : item.category });
 
     // Book categories have an ISBN box. Without an ISBN we put Vinted's "valid but unknown" one, which still

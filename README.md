@@ -47,8 +47,11 @@ extension records the listing URL back in your inventory.
 
 On Vinted:
 - **Category:** picked for books, comics and magazines, from the item's category plus title and tags
-  (`vintedCategory` in `packages/shared`). A book is filed under Fiction or Non-fiction only when words
-  like "novel" or "guide" say which; otherwise you pick.
+  (`vintedCategory` in `packages/shared`). Words like "novel" or "guide" decide Fiction or Non-fiction;
+  a book that says neither goes under Fiction, flagged as a guess in the on-page panel.
+- **ISBN and Language:** the ISBN box gets the saved ISBN, or `0000000000000` (valid, matches no book) so
+  that Vinted shows its Language field. Language is the saved one, else named in the title or tags, else
+  Turkish for Turkish letters in the title, else English (`bookLanguage`).
 - **Parcel size:** Small unless the item's own package size or weight says bigger.
 - **Recording the listing:** Vinted stays on your profile after Upload instead of opening the new item, so
   the extension reads the new item's id from the upload request (`content/vinted-page.ts`, in the page's

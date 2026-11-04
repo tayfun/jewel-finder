@@ -187,9 +187,11 @@ describe("vintedCategory", () => {
     expect(cat("Isaac Asimov Foundation science fiction PB")).toBe("Fiction");
   });
 
-  it("leaves a book it can't place to the seller", () => {
-    expect(cat("Elif Şafak Baba ve Piç Doğan Kitap Paperback")).toBeNull();
-    expect(cat("A novel guide")).toBeNull();
+  it("files a book it can't place under Fiction, as a guess", () => {
+    const guess = (title: string) => vintedCategory({ title, category: books, tags: [], book: null });
+    expect(guess("Erkekler Ve Kadınlar - Giroud & Lévy")).toEqual({ name: "Fiction", parent: "Books & Media > Books", guessed: true });
+    expect(guess("A novel guide")).toMatchObject({ name: "Fiction", guessed: true });
+    expect(guess("Margaret Atwood novel")?.guessed).toBeUndefined();
   });
 
   it("uses the category for comics, magazines, textbooks and children's books", () => {
