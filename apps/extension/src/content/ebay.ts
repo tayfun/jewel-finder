@@ -51,6 +51,8 @@ export const FIELDS = {
   brand: { selectors: ['input[name="attributes.Brand"]'], labels: [/^brand$/] },
   size: { selectors: ['input[name="attributes.Size"]'], labels: [/^size$/] },
   colour: { selectors: ['input[name="attributes.Colour"]', 'input[name="attributes.Color"]'], labels: [/^colou?r$/] },
+  // Books: the language Gemini read from the photos (item.book.language).
+  language: { selectors: ['input[name="attributes.Language"]'], labels: [/^language$/] },
 } satisfies Record<string, FieldSpec>;
 
 function escapeHtml(s: string) {
@@ -345,6 +347,7 @@ export const ebay: Adapter = {
       ["brand", "Brand", item.brand],
       ["size", "Size", item.size],
       ["colour", "Colour", item.colour],
+      ["language", "Language", item.book?.language ?? ""],
     ] as const) {
       if (!value) continue;
       if (await fillSpecific(FIELDS[key], value)) report.filled.push(label);

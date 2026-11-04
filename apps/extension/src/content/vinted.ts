@@ -43,6 +43,11 @@ export const FIELDS = {
     selectors: ['[data-testid="condition-select-dropdown-input"]', "#condition", 'input[name="condition"]'],
     labels: [/^condition$/],
   },
+  // Books only, and only once a book category is picked.
+  language: {
+    selectors: ['[data-testid="language-select-dropdown-input"]', "#language", 'input[name="language"]'],
+    labels: [/^language$/],
+  },
 } satisfies Record<string, FieldSpec>;
 
 const RADIOS = 'input[type=radio], [role=radio]';
@@ -243,6 +248,11 @@ export const vinted: Adapter = {
     else report.manual.push({ field: "Condition", value: conditionLabel });
 
     if (item.colour) report.manual.push({ field: "Colour", value: item.colour });
+
+    const languageValue = item.book?.language ?? "";
+    const language = languageValue ? findField(FIELDS.language) : null;
+    if (language && (await pickOption(language, languageValue))) report.filled.push("Language");
+    else if (languageValue) report.manual.push({ field: "Language", value: languageValue });
 
     const price = findField(FIELDS.price);
     if (price && item.price != null) {

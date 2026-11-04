@@ -172,6 +172,37 @@ describe("ebay adapter", () => {
   }, 15_000);
 });
 
+describe("book language", () => {
+  const book = { author: "J.R.R. Tolkien", isbn: "", publisher: "", yearPublished: null, edition: "", printing: "", format: null, language: "English", signed: false, dustJacket: null, rarity: null, rarityNotes: "" };
+  const bookCtx = (marketplace: "vinted" | "ebay"): JobContext => ({ ...ctx(marketplace), item: { ...item, book } });
+
+  it("ebay: fills the Language item specific", async () => {
+    document.body.innerHTML = `<input name="title"><input name="attributes.Language"><input name="price">`;
+    const report = await ebay.fill(bookCtx("ebay"), []);
+    expect(document.querySelector<HTMLInputElement>('[name="attributes.Language"]')!.value).toBe("English");
+    expect(report.filled).toContain("Language");
+  }, 15_000);
+
+  it("ebay: asks for it when the form has no Language field", async () => {
+    document.body.innerHTML = `<input name="title"><input name="price">`;
+    const report = await ebay.fill(bookCtx("ebay"), []);
+    expect(report.manual).toContainEqual({ field: "Language", value: "English" });
+  }, 15_000);
+
+  it("vinted: asks for it until a book category shows the Language field", async () => {
+    document.body.innerHTML = `<input id="title"><textarea id="description"></textarea><input id="price">`;
+    const report = await vinted.fill(bookCtx("vinted"), []);
+    expect(report.manual).toContainEqual({ field: "Language", value: "English" });
+  }, 15_000);
+
+  it("leaves it out for items that aren't books", async () => {
+    document.body.innerHTML = `<input name="title"><input name="attributes.Language"><input name="price">`;
+    const report = await ebay.fill(ctx("ebay"), []);
+    expect(document.querySelector<HTMLInputElement>('[name="attributes.Language"]')!.value).toBe("");
+    expect([...report.filled, ...report.manual.map((m) => m.field)]).not.toContain("Language");
+  }, 15_000);
+});
+
 describe("cross-delisting", () => {
   const setUrl = (url: string) => (window as unknown as { happyDOM: { setURL(u: string): void } }).happyDOM.setURL(url);
   const listed = (marketplace: "vinted" | "ebay", externalId: string, url: string): JobContext => {
