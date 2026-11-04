@@ -24,8 +24,11 @@ export interface Adapter {
    * the page publishes one. Only acted on after we've filled a form in this tab.
    */
   watchPublished?(onPublished: (published: Published) => void): void;
-  /** Tidies up after publishing, e.g. closes Vinted's "Item listed · List another" promo. */
-  afterPublished?(): Promise<void>;
+  /**
+   * Tidies up after publishing, e.g. closes Vinted's "Item listed · List another" promo. Resolves true once
+   * done. Also runs on the next page the tab loads, since the marketplace may navigate after publishing.
+   */
+  afterPublished?(): Promise<boolean>;
   /** Ending a live listing (cross-delisting). */
   delist: Delister;
   /** Bringing the seller's existing listings into the inventory. */
@@ -73,7 +76,24 @@ function storedPublished(ctx: JobContext): Published | null {
   }
 }
 
+// Set when we publish; the tidy-up keeps going on the next page load (the job itself is done by then).
+const AFTER_PUBLISHED_KEY = "jewel-finder.after-published";
+const AFTER_PUBLISHED_FOR_MS = 60_000;
+
+function afterPublished(adapter: Adapter) {
+  if (!adapter.afterPublished) return;
+  const since = Number(sessionStorage.getItem(AFTER_PUBLISHED_KEY));
+  if (!since || Date.now() - since > AFTER_PUBLISHED_FOR_MS) return;
+  void adapter
+    .afterPublished()
+    .then((done) => {
+      if (done || Date.now() - since > AFTER_PUBLISHED_FOR_MS) sessionStorage.removeItem(AFTER_PUBLISHED_KEY);
+    })
+    .catch(() => {});
+}
+
 export async function run(adapter: Adapter): Promise<void> {
+  afterPublished(adapter);
   let ctx: JobContext | null;
   try {
     ctx = await send({ type: "GET_JOB" });
@@ -100,7 +120,8 @@ export async function run(adapter: Adapter): Promise<void> {
   async function publish(published: Published) {
     if (finished) return;
     finished = true;
-    void adapter.afterPublished?.().catch(() => {});
+    sessionStorage.setItem(AFTER_PUBLISHED_KEY, String(Date.now()));
+    afterPublished(adapter);
     try {
       const { next } = await send({ type: "JOB_PUBLISHED", ...published });
       sessionStorage.removeItem(filledKey(job));

@@ -159,6 +159,50 @@ describe("vinted adapter: books", () => {
   }, 15_000);
 });
 
+describe("vinted adapter: condition", () => {
+  // Vinted's condition select: a button showing the value, opening a role=menu of role=radio cells.
+  function conditionSelect() {
+    document.body.innerHTML = `
+      <input id="title" data-testid="title--input">
+      <div><label for="cond">Condition</label>
+        <button id="cond" type="button" data-testid="category-condition-single-list-input">
+          <span data-testid="category-condition-single-list-input--value">Select condition</span>
+        </button></div>`;
+    const trigger = document.getElementById("cond")!;
+    const value = trigger.querySelector("span")!;
+    trigger.addEventListener("click", () => {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div role="menu">${["New with tags", "Very good", "Good"]
+          .map((t, i) => `<div role="radio" data-testid="condition-${i}"><div data-testid="condition-${i}--title">${t}</div><div>About it</div></div>`)
+          .join("")}</div>`,
+      );
+      for (const cell of document.querySelectorAll<HTMLElement>("[role=menu] [role=radio]")) {
+        cell.addEventListener("click", () => {
+          value.textContent = cell.querySelector("[data-testid$=--title]")!.textContent;
+          document.querySelector("[role=menu]")!.remove();
+        });
+      }
+    });
+    return value;
+  }
+
+  it("picks the condition, and puts it back if Vinted clears it after the photos load", async () => {
+    const value = conditionSelect();
+    const report = await vinted.fill({ ...ctx("vinted"), item: { ...item, brand: "", packageSize: null, weightGrams: null } }, []);
+    expect(report.filled).toContain("Condition");
+    expect(value.textContent).toBe("Very good");
+
+    value.textContent = "Select condition"; // Vinted re-rendered the form
+    await new Promise((r) => setTimeout(r, 2500));
+    expect(value.textContent).toBe("Very good");
+
+    value.textContent = "Good"; // the seller's own choice stays
+    await new Promise((r) => setTimeout(r, 2000));
+    expect(value.textContent).toBe("Good");
+  }, 20_000);
+});
+
 describe("vinted adapter: after publishing", () => {
   it("closes the 'Item listed · List another' promo with Later", async () => {
     let closed = "";
@@ -171,7 +215,7 @@ describe("vinted adapter: after publishing", () => {
         </div></div>`;
       for (const b of document.querySelectorAll("button")) b.addEventListener("click", () => (closed = b.textContent ?? ""));
     }, 300);
-    await vinted.afterPublished!();
+    expect(await vinted.afterPublished!()).toBe(true);
     expect(closed).toBe("Later");
   });
 });

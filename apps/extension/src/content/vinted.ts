@@ -142,6 +142,34 @@ async function pickCategory(category: VintedCategory): Promise<boolean> {
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+/** True while one of Vinted's select buttons still shows its placeholder ("Select condition"). */
+function isUnset(trigger: HTMLElement): boolean {
+  const value = normalize(trigger.querySelector('[data-testid$="--value"]')?.textContent ?? trigger.textContent);
+  return !value || /^select\b/.test(value);
+}
+
+/** Re-picks `value` in a select whenever it's empty, for a few minutes after filling. Never overrides a choice. */
+function keepSelected(spec: FieldSpec, value: string, forMs = 3 * 60_000) {
+  const until = Date.now() + forMs;
+  let busy = false;
+  let failures = 0;
+  const timer = setInterval(() => {
+    if (Date.now() > until || failures >= 3) return clearInterval(timer);
+    if (busy || document.querySelector(DIALOG + ', [role=menu]')) return; // don't fight an open menu or dialog
+    const trigger = findField(spec);
+    if (!trigger || !(trigger instanceof HTMLButtonElement) || !isUnset(trigger)) return;
+    busy = true;
+    void pickOption(trigger, value)
+      .then(async (ok) => {
+        if (!ok) failures++;
+        await sleep(300);
+        // Close the menu if it stayed open after the pick.
+        if (ok) document.querySelector("[role=menu]")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      })
+      .finally(() => (busy = false));
+  }, 1500);
+}
+
 /** The listing to end: a relist's old one, otherwise the item's listing here. */
 const targetOf = (ctx: JobContext): { externalId: string | null; url: string | null } | undefined =>
   ctx.job.target ?? ctx.item.listings.find((l) => l.marketplace === "vinted");
@@ -242,9 +270,10 @@ export const vinted: Adapter = {
           .map((d) => findButton(/^(later|not now|close)$/, d))
           .find(Boolean) ??
         null,
-      15_000,
+      20_000,
     );
     if (later) click(later);
+    return !!later;
   },
 
   // Vinted goes back to the seller's profile after publishing, so the id comes from the upload request
@@ -340,6 +369,9 @@ export const vinted: Adapter = {
     const condition = conditionLabel ? findField(FIELDS.condition) : null;
     if (condition && (await pickOption(condition, conditionLabel))) report.filled.push("Condition");
     else report.manual.push({ field: "Condition", value: conditionLabel });
+    // Vinted re-renders the form once the photos are processed (and when the category changes), which can
+    // clear Condition again, or bring it up only later: put it back whenever it's empty for a while.
+    if (conditionLabel) keepSelected(FIELDS.condition, conditionLabel);
 
     if (item.colour) report.manual.push({ field: "Colour", value: item.colour });
 
