@@ -54,10 +54,11 @@ describe("duplicateMatch", () => {
     expect(duplicateMatch(a, b)!.score).toBeGreaterThanOrEqual(0.95);
   });
 
-  it("doubts pairs that are both live on one marketplace, or both sold, or archived", () => {
+  it("flags pairs live on one marketplace as listed twice, and rules out both sold or archived", () => {
     const a = item({ title: "Zara linen shirt white", live: ["vinted"] });
-    const b = item({ title: "Zara linen shirt white", live: ["vinted"] });
-    expect(duplicateMatch(a, b)).toBeNull();
+    const b = item({ title: "Zara linen shirt white", live: ["vinted", "ebay"] });
+    expect(duplicateMatch(a, b)).toMatchObject({ listedTwiceOn: ["vinted"], reasons: ["Listed twice on Vinted", "Same title"] });
+    expect(duplicateMatch(item({ title: "Zara linen shirt", live: ["ebay"] }), item({ title: "Zara linen shirt" }))?.listedTwiceOn).toBeUndefined();
     expect(duplicateMatch(item({ title: "Zara linen shirt", status: "sold" }), item({ title: "Zara linen shirt", status: "sold" }))).toBeNull();
     expect(duplicateMatch(item({ title: "Zara linen shirt", status: "archived" }), item({ title: "Zara linen shirt" }))).toBeNull();
     // Pending on a site (listed from the app, never recorded) and live there on the other: one item, imported twice.
@@ -67,6 +68,16 @@ describe("duplicateMatch", () => {
     expect(duplicateMatch(pending, imported)).toMatchObject({ reasons: expect.arrayContaining(["Listed on Vinted and eBay"]) });
     // Sold on one site, still live on the other: exactly the case worth catching.
     expect(duplicateMatch(item({ title: "Zara linen shirt", status: "sold" }), item({ title: "Zara linen shirt", live: ["ebay"] }))!.score).toBe(1);
+  });
+});
+
+describe("findDuplicatePairs: listed twice", () => {
+  it("shows a pair live on the same site only on a close match", () => {
+    const a = item({ id: "a", title: "Murat Menteş Antika Titanik Paperback Turkish 2018", live: ["ebay", "vinted"] });
+    const b = item({ id: "b", title: "Murat Menteş Antika Titanik Paperback Turkish 2018", live: ["ebay"] });
+    const c = item({ id: "c", title: "Murat Menteş Dublörün Dilemması Paperback Turkish", live: ["ebay"] });
+    const pairs = findDuplicatePairs([a, b, c]);
+    expect(pairs.map((p) => [p.a.id, p.b.id, p.listedTwiceOn])).toEqual([["a", "b", ["ebay"]]]);
   });
 });
 

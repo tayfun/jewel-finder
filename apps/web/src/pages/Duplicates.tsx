@@ -1,4 +1,4 @@
-import { CONDITION_LABELS, formatMoney, type DismissedPair, type DuplicatePair, type ItemWithListings } from "@jf/shared";
+import { CONDITION_LABELS, MARKETPLACE_LABELS, formatMoney, type DismissedPair, type DuplicatePair, type ItemWithListings } from "@jf/shared";
 import { useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api";
@@ -70,7 +70,8 @@ export function Duplicates() {
       </div>
       <p className="muted">
         Items that look like the same thing entered twice, for example imported from both Vinted and eBay. Merge them into one
-        item (its listings come along), or mark them as different so they aren't suggested again.
+        item (its listings come along), or mark them as different so they aren't suggested again. Pairs live on the same site
+        twice need one of those listings ended before they can merge.
       </p>
       {merged > 0 && <p className="notice">Merged {merged} pair{merged === 1 ? "" : "s"}.</p>}
       {justDismissed && (
@@ -94,22 +95,42 @@ export function Duplicates() {
       <div className={`dup-list ${pairs.loading ? "loading" : ""}`}>
         {list?.map((pair) => {
           const key = pairKey(pair);
+          const twiceOn = pair.listedTwiceOn?.map((m) => MARKETPLACE_LABELS[m]).join(" and ");
           return (
-            <section key={key} className="card dup-pair">
+            <section key={key} className={`card dup-pair ${twiceOn ? "dup-twice" : ""}`}>
               <div className="dup-why">
-                <strong>{pair.score >= 0.95 ? "Very likely the same item" : "Likely the same item"}</strong>
+                <strong>
+                  {twiceOn
+                    ? `Same item listed twice on ${twiceOn}, or two copies?`
+                    : pair.score >= 0.95
+                      ? "Very likely the same item"
+                      : "Likely the same item"}
+                </strong>
                 {pair.reasons.map((r) => (
                   <span key={r} className="badge">
                     {r}
                   </span>
                 ))}
               </div>
+              {twiceOn && (
+                <p className="notice small dup-twice-note">
+                  Both have a live {twiceOn} listing. If it's one item, either could sell, so it could sell twice: open the one
+                  to drop and end its {twiceOn} listing, then merge them here. If you have two copies, mark them as not
+                  duplicates.
+                </p>
+              )}
               <div className="dup-items">
                 {[
                   [pair.a, pair.b],
                   [pair.b, pair.a],
                 ].map(([item, other]) => (
-                  <DupItem key={item!.id} item={item!} disabled={!!busy} onMerge={() => merge(pair, item!, other!)} />
+                  <DupItem
+                    key={item!.id}
+                    item={item!}
+                    disabled={!!busy}
+                    mergeBlocked={twiceOn ? `End one of the ${twiceOn} listings first: an item holds one listing per site` : undefined}
+                    onMerge={() => merge(pair, item!, other!)}
+                  />
                 ))}
               </div>
               {errors[key] && <p className="error">{errors[key]}</p>}
@@ -155,7 +176,18 @@ export function Duplicates() {
 
 const pairKey = (p: { a: { id: string }; b: { id: string } }) => `${p.a.id}|${p.b.id}`;
 
-function DupItem({ item, disabled, onMerge }: { item: ItemWithListings; disabled: boolean; onMerge: () => void }) {
+function DupItem({
+  item,
+  disabled,
+  mergeBlocked,
+  onMerge,
+}: {
+  item: ItemWithListings;
+  disabled: boolean;
+  /** Why merging isn't possible yet, if it isn't. */
+  mergeBlocked?: string;
+  onMerge: () => void;
+}) {
   const { settings } = useAccount();
   const details = [
     item.brand,
@@ -182,7 +214,12 @@ function DupItem({ item, disabled, onMerge }: { item: ItemWithListings; disabled
         <div className="muted small">
           {item.images.length} photo{item.images.length === 1 ? "" : "s"} · added {new Date(item.createdAt).toLocaleDateString()}
         </div>
-        <button className="primary" disabled={disabled} onClick={onMerge} title="Merge the other item into this one">
+        <button
+          className="primary"
+          disabled={disabled || !!mergeBlocked}
+          onClick={onMerge}
+          title={mergeBlocked ?? "Merge the other item into this one"}
+        >
           Merge into this one
         </button>
       </div>

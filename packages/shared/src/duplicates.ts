@@ -2,16 +2,23 @@
 // Pure functions so the Worker, the tests and anything else agree on what counts as a duplicate.
 import { MARKETPLACES } from "./constants";
 import { MARKETPLACE_LABELS } from "./marketplaces";
-import type { ItemWithListings } from "./schemas";
+import type { ItemWithListings, Marketplace } from "./schemas";
 
 /** Pairs scoring at least this are shown as possible duplicates. */
 export const DUPLICATE_THRESHOLD = 0.8;
+/** Both live on one site is usually two copies, so those pairs need a closer match to be shown. */
+export const LISTED_TWICE_THRESHOLD = 0.9;
 
 export interface DuplicateMatch {
   /** 0–1. */
   score: number;
   /** Why they look alike, for the seller ("Same brand", "Listed on Vinted and eBay"…). */
   reasons: string[];
+  /**
+   * Sites where both items are live. Usually two copies; if it's one, the same thing is listed twice there
+   * and could sell twice. They can't be merged until one of those listings is ended.
+   */
+  listedTwiceOn?: Marketplace[];
 }
 
 export interface DuplicatePair extends DuplicateMatch {
@@ -85,7 +92,7 @@ const liveOn = (item: ItemWithListings) => new Set(item.listings.filter((l) => L
 
 /**
  * How likely two items are the same physical item, or null when something rules it out
- * (different ISBN, author, brand or size, or both live on the same marketplace). Cheap enough to run on every pair of a 1000-item inventory.
+ * (different ISBN, author, brand or size). Both live on one marketplace sets `listedTwiceOn`. Cheap enough to run on every pair of a 1000-item inventory.
  */
 export function duplicateMatch(
   a: ItemWithListings,
@@ -95,8 +102,9 @@ export function duplicateMatch(
   if (a.status === "archived" || b.status === "archived") return null;
   // Two sold items with one title are usually two copies, and nothing is left to fix.
   if (a.status === "sold" && b.status === "sold") return null;
-  // Both live on the same site: two copies (or one listed twice), and an item holds one listing per site.
-  for (const m of liveOn(a)) if (liveOn(b).has(m)) return null;
+  // Both live on the same site: two copies, or one thing listed twice there. Reported, so an accidental
+  // double listing gets noticed, but an item holds one listing per site, so they can't merge as they are.
+  const listedTwiceOn = MARKETPLACES.filter((m) => liveOn(a).has(m) && liveOn(b).has(m));
 
   const reasons: string[] = [];
   const isbnA = a.book?.isbn ?? "";
@@ -143,14 +151,16 @@ export function duplicateMatch(
   // One live on Vinted, the other on eBay: the classic double import.
   const liveA = liveOn(a);
   const liveB = liveOn(b);
-  if (liveA.size && liveB.size) {
+  if (listedTwiceOn.length) {
+    reasons.unshift(`Listed twice on ${listedTwiceOn.map((m) => MARKETPLACE_LABELS[m]).join(" and ")}`);
+  } else if (liveA.size && liveB.size) {
     score += 0.1;
     const names = MARKETPLACES.filter((m) => liveA.has(m) || liveB.has(m)).map((m) => MARKETPLACE_LABELS[m]);
     reasons.push(`Listed on ${names.join(" and ")}`);
   }
 
   score = Math.max(0, Math.min(1, score));
-  return { score: Math.round(score * 100) / 100, reasons };
+  return { score: Math.round(score * 100) / 100, reasons, ...(listedTwiceOn.length ? { listedTwiceOn } : {}) };
 }
 
 /** Key for a pair regardless of order, used to remember "not duplicates". */
@@ -191,7 +201,8 @@ export function findDuplicatePairs(
         seen.add(key);
         if (dismissed.has(key)) continue;
         const match = duplicateMatch(a, b, { a: tokens[i], b: tokens[j] });
-        if (match && match.score >= DUPLICATE_THRESHOLD) pairs.push({ a, b, ...match });
+        const threshold = match?.listedTwiceOn ? LISTED_TWICE_THRESHOLD : DUPLICATE_THRESHOLD;
+        if (match && match.score >= threshold) pairs.push({ a, b, ...match });
       }
     }
   }

@@ -457,6 +457,9 @@ label.checkbox input { width: 1rem; }
 .dup-list.loading { opacity: 0.6; }
 .dup-why { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-bottom: 0.9rem; }
 .dup-why .badge { text-transform: none; }
+.dup-twice { border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.dup-twice .dup-why strong { color: var(--danger); }
+.dup-twice-note { margin: 0 0 0.9rem; }
 .dup-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 0.9rem; }
 .dup-item { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 0.9rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .dup-item .thumb { border-radius: 8px; }
