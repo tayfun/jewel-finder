@@ -1,10 +1,11 @@
 import type { ItemWithListings, Settings } from "@jf/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ebay } from "../src/content/ebay";
-import { vinted } from "../src/content/vinted";
+import { stopVintedWatchers, vinted } from "../src/content/vinted";
 import type { JobContext } from "../src/messages";
 
 afterEach(() => {
+  stopVintedWatchers();
   document.body.innerHTML = "";
 });
 
@@ -203,21 +204,49 @@ describe("vinted adapter: condition", () => {
   }, 20_000);
 });
 
+describe("vinted adapter: ISBN", () => {
+  it("puts 0000000000000 in the ISBN box when we have no ISBN, so Language still shows up", async () => {
+    document.body.innerHTML = `<input id="title" data-testid="title--input"><input data-testid="isbn--input">`;
+    const report = await vinted.fill(
+      { ...ctx("vinted"), item: { ...item, brand: "", condition: null, category: "Books", book: null, title: "Elif Şafak Baba ve Piç" } },
+      [],
+    );
+    expect(document.querySelector<HTMLInputElement>('[data-testid="isbn--input"]')!.value).toBe("0000000000000");
+    expect(report.filled).toContain("ISBN (none saved, so 0000000000000)");
+    expect(report.manual).toContainEqual({ field: "Language", value: "Turkish" });
+  }, 15_000);
+});
+
 describe("vinted adapter: after publishing", () => {
-  it("closes the 'Item listed · List another' promo with Later", async () => {
-    let closed = "";
-    setTimeout(() => {
-      document.body.innerHTML = `
-        <div class="ReactModal__Overlay"><div role="dialog" aria-modal="true">
-          <h1>Item listed</h1><span>The more listings you have, the easier it is for buyers to find you.</span>
+  it("closes the 'List another' promo with Later, then the rating survey with ✕", async () => {
+    const closed: string[] = [];
+    const show = (html: string) => {
+      document.body.innerHTML = html;
+      for (const b of document.querySelectorAll("button")) {
+        b.addEventListener("click", () => {
+          closed.push(b.getAttribute("aria-label") ?? b.textContent ?? "");
+          document.body.innerHTML = "";
+        });
+      }
+    };
+    setTimeout(
+      () =>
+        show(`<div role="dialog" aria-modal="true"><h1>Item listed</h1>
           <button type="button" data-testid="list-promotion-submit-cta"><span>List another</span></button>
-          <button type="button" data-testid="list-promotion-cancel-cta"><span>Later</span></button>
-        </div></div>`;
-      for (const b of document.querySelectorAll("button")) b.addEventListener("click", () => (closed = b.textContent ?? ""));
-    }, 300);
+          <button type="button" data-testid="list-promotion-cancel-cta"><span>Later</span></button></div>`),
+      300,
+    );
+    setTimeout(
+      () =>
+        show(`<div role="dialog" aria-modal="true" data-testid="feedback-modal">
+          <button type="button" aria-label="Close" data-testid="feedback-resolved-close"></button>
+          <h1>Please rate</h1><h3>What do you think of our upload process?</h3>
+          <button type="button" data-testid="feedback-resolved-face-icon-5" title="Great"></button></div>`),
+      2000,
+    );
     expect(await vinted.afterPublished!()).toBe(true);
-    expect(closed).toBe("Later");
-  });
+    expect(closed).toEqual(["Later", "Close"]);
+  }, 30_000);
 });
 
 describe("ebay adapter", () => {

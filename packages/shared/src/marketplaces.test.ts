@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EBAY_CONDITION_LABELS,
+  bookLanguage,
   vintedCategory,
   conditionFromText,
   ebayPackageSize,
@@ -206,5 +207,18 @@ describe("vintedCategory", () => {
   it("ignores items that aren't books", () => {
     expect(cat("Levi's 501", "Men › Jeans")).toBeNull();
     expect(cat("Mystery novel", "", { book: true })).toBe("Fiction");
+  });
+});
+
+describe("bookLanguage", () => {
+  const lang = (title: string, language = "", tags: string[] = []) =>
+    bookLanguage({ title, tags, book: language ? ({ language } as never) : null });
+  it("uses the saved language, then the title, then Turkish letters, else English", () => {
+    expect(lang("Anything", "French")).toBe("French");
+    expect(lang("Elif Şafak Baba ve Piç Doğan Kitap Paperback 82. Baskı 2010 Turkish")).toBe("Turkish");
+    expect(lang("William Shakespeare Fırtına Can Yücel Çeviri PB İş Bankası")).toBe("Turkish");
+    expect(lang("Margaret Atwood The Handmaid's Tale PB Vintage 1996 English Dystopia")).toBe("English");
+    expect(lang("Le Petit Prince", "", ["french"])).toBe("French");
+    expect(lang("Roald Dahl The Witches PB Puffin")).toBe("English");
   });
 });

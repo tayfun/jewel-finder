@@ -117,6 +117,24 @@ export function vintedCategory(item: Pick<Item, "category" | "title" | "tags" | 
   return null;
 }
 
+const LANGUAGES = ["English", "Turkish", "French", "German", "Spanish", "Italian", "Portuguese", "Dutch", "Russian", "Greek", "Polish", "Arabic", "Japanese", "Chinese"];
+
+/**
+ * A book's language: the one saved with it, else a language named in the title or tags ("… Turkish"), else
+ * Turkish when the title uses Turkish letters, else English.
+ */
+export function bookLanguage(item: Pick<Item, "title" | "tags" | "book">): string {
+  if (item.book?.language) return item.book.language;
+  const words = [item.title, ...item.tags].join(" ");
+  const named = LANGUAGES.find((l) => new RegExp(`\\b${l}\\b`, "i").test(words));
+  if (named) return named;
+  if (/[şŞğĞıİ]/.test(item.title)) return "Turkish";
+  return "English";
+}
+
+/** What to put in Vinted's ISBN box when we don't have one: accepted as valid, matches no book. */
+export const VINTED_NO_ISBN = "0000000000000";
+
 /** Checks an ISBN-10/13 check digit (input already stripped of spaces and hyphens). */
 export function isValidIsbn(isbn: string): boolean {
   if (/^\d{9}[\dX]$/.test(isbn)) {

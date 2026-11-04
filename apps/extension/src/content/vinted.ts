@@ -5,6 +5,8 @@ import {
   parseListingUrl,
   priceToMinor,
   toDecimal,
+  VINTED_NO_ISBN,
+  bookLanguage,
   vintedCategory,
   vintedPackageSize,
   type VintedCategory,
@@ -56,7 +58,7 @@ export const FIELDS = {
   },
   // Books only, and only once a book category is picked.
   language: {
-    selectors: ['[data-testid="language-select-dropdown-input"]', "#language", 'input[name="language"]'],
+    selectors: ['[data-testid="isbn-language_book-single-list_search-input"]', '[data-testid="language-select-dropdown-input"]', "#language", 'input[name="language"]'],
     labels: [/^language$/],
   },
 } satisfies Record<string, FieldSpec>;
@@ -142,32 +144,84 @@ async function pickCategory(category: VintedCategory): Promise<boolean> {
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// Background watchers started by a fill; stopVintedWatchers ends them (a new fill, or tests).
+const watchers = new Set<() => void>();
+
+export function stopVintedWatchers() {
+  for (const stop of watchers) stop();
+}
+
+/** Runs `tick` every `everyMs` for up to `forMs`, until it returns true. */
+function watch(tick: () => boolean | void, everyMs: number, forMs: number) {
+  const until = Date.now() + forMs;
+  const timer = setInterval(() => {
+    if (Date.now() > until || tick() === true) stop();
+  }, everyMs);
+  const stop = () => {
+    clearInterval(timer);
+    watchers.delete(stop);
+  };
+  watchers.add(stop);
+}
+
 /** True while one of Vinted's select buttons still shows its placeholder ("Select condition"). */
 function isUnset(trigger: HTMLElement): boolean {
   const value = normalize(trigger.querySelector('[data-testid$="--value"]')?.textContent ?? trigger.textContent);
   return !value || /^select\b/.test(value);
 }
 
+/**
+ * A menu or dialog the seller can see is open. Vinted keeps closed menus and a hidden cookie dialog in the
+ * page, so this goes by the triggers' aria-expanded and by visibility.
+ */
+function somethingOpen(): boolean {
+  if (document.querySelector('[aria-haspopup][aria-expanded="true"]')) return true;
+  return [...document.querySelectorAll<HTMLElement>(DIALOG)].some((d) => d.offsetParent !== null || d.getClientRects().length > 0);
+}
+
 /** Re-picks `value` in a select whenever it's empty, for a few minutes after filling. Never overrides a choice. */
 function keepSelected(spec: FieldSpec, value: string, forMs = 3 * 60_000) {
-  const until = Date.now() + forMs;
   let busy = false;
   let failures = 0;
-  const timer = setInterval(() => {
-    if (Date.now() > until || failures >= 3) return clearInterval(timer);
-    if (busy || document.querySelector(DIALOG + ', [role=menu]')) return; // don't fight an open menu or dialog
-    const trigger = findField(spec);
-    if (!trigger || !(trigger instanceof HTMLButtonElement) || !isUnset(trigger)) return;
-    busy = true;
-    void pickOption(trigger, value)
-      .then(async (ok) => {
-        if (!ok) failures++;
-        await sleep(300);
-        // Close the menu if it stayed open after the pick.
-        if (ok) document.querySelector("[role=menu]")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-      })
-      .finally(() => (busy = false));
-  }, 1500);
+  watch(
+    () => {
+      if (failures >= 3) return true;
+      if (busy || somethingOpen()) return; // don't fight an open menu or dialog
+      const trigger = findField(spec);
+      if (!trigger || !(trigger instanceof HTMLButtonElement) || !isUnset(trigger)) return;
+      busy = true;
+      void pickOption(trigger, value)
+        .then(async (ok) => {
+          if (!ok) failures++;
+          await sleep(300);
+          // Close the menu if it stayed open after the pick.
+          if (ok && trigger.getAttribute("aria-expanded") === "true") {
+            trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+          }
+        })
+        .finally(() => (busy = false));
+    },
+    1500,
+    forMs,
+  );
+}
+
+/** The button that dismisses one of Vinted's after-upload popups, if one is showing. */
+function afterUploadPopupClose(): HTMLElement | null {
+  const known = document.querySelector<HTMLElement>('[data-testid="list-promotion-cancel-cta"], [data-testid="feedback-resolved-close"]');
+  if (known) return known;
+  for (const dialog of document.querySelectorAll<HTMLElement>(DIALOG)) {
+    const text = normalize(dialog.textContent);
+    if (/item listed/.test(text)) {
+      const later = findButton(/^(later|not now|close)$/, dialog);
+      if (later) return later;
+    }
+    if (/please rate|what do you think of/.test(text)) {
+      const close = dialog.querySelector<HTMLElement>('button[aria-label="Close" i]');
+      if (close) return close;
+    }
+  }
+  return null;
 }
 
 /** The listing to end: a relist's old one, otherwise the item's listing here. */
@@ -260,20 +314,23 @@ export const vinted: Adapter = {
 
   detectPublished: (url) => parseListingUrl("vinted", url.href),
 
-  // "Item listed" promo with "List another" / "Later": it covers the page and adds nothing for us.
+  // Popups Vinted shows after an upload, which cover the page and add nothing for us: the "Item listed ·
+  // List another" promo (→ Later) and the "Please rate our upload process" survey (→ ✕, no rating sent).
+  // They can come one after the other, so keep watching for a while.
   async afterPublished() {
-    const later = await waitFor(
-      () =>
-        document.querySelector<HTMLElement>('[data-testid="list-promotion-cancel-cta"]') ??
-        [...document.querySelectorAll(DIALOG)]
-          .filter((d) => /item listed/.test(normalize(d.textContent)))
-          .map((d) => findButton(/^(later|not now|close)$/, d))
-          .find(Boolean) ??
-        null,
-      20_000,
-    );
-    if (later) click(later);
-    return !!later;
+    let closed = 0;
+    const until = Date.now() + 20_000;
+    while (Date.now() < until) {
+      const button = afterUploadPopupClose();
+      if (button) {
+        click(button);
+        closed++;
+        await sleep(600);
+      } else {
+        await sleep(300);
+      }
+    }
+    return closed > 0;
   },
 
   // Vinted goes back to the seller's profile after publishing, so the id comes from the upload request
@@ -323,6 +380,7 @@ export const vinted: Adapter = {
   },
 
   async fill({ item }, photos): Promise<FillReport> {
+    stopVintedWatchers();
     const report: FillReport = { filled: [], manual: [], warnings: [] };
     const title = await waitFor(() => findField(FIELDS.title), 15_000);
     if (!title) throw new Error("Couldn't find Vinted's upload form. Are you signed in to Vinted?");
@@ -352,11 +410,17 @@ export const vinted: Adapter = {
     if (category && (await pickCategory(category))) report.filled.push(`Category (${category.name})`);
     else report.manual.push({ field: "Category", value: category ? `${category.parent} > ${category.name}` : item.category });
 
-    const isbnValue = item.book?.isbn ?? "";
-    const isbn = isbnValue ? findField(FIELDS.isbn) : null;
+    // Book categories have an ISBN box. Without an ISBN we put Vinted's "valid but unknown" one, which still
+    // brings up the Language field (a real ISBN fills author, title and language from Vinted's records).
+    const isbn = category ? await waitFor(() => findField(FIELDS.isbn), 1500) : findField(FIELDS.isbn);
+    const isBook = Boolean(isbn);
     if (isbn) {
+      const isbnValue = item.book?.isbn || VINTED_NO_ISBN;
       setValue(isbn, isbnValue);
-      report.filled.push("ISBN");
+      report.filled.push(isbnValue === VINTED_NO_ISBN ? "ISBN (none saved, so 0000000000000)" : "ISBN");
+      // The lookup re-renders the book fields; let it finish before picking from them.
+      await waitFor(() => findField(FIELDS.language), 4000);
+      await sleep(300);
     }
 
     const brand = item.brand ? findField(FIELDS.brand) : null;
@@ -375,10 +439,12 @@ export const vinted: Adapter = {
 
     if (item.colour) report.manual.push({ field: "Colour", value: item.colour });
 
-    const languageValue = item.book?.language ?? "";
+    // Any book: when the field isn't there yet (category picked by hand) it goes on the to-do list.
+    const languageValue = isBook || item.book || category?.parent.startsWith("Books") ? bookLanguage(item) : "";
     const language = languageValue ? findField(FIELDS.language) : null;
-    if (language && (await pickOption(language, languageValue))) report.filled.push("Language");
+    if (language && (await pickOption(language, languageValue))) report.filled.push(`Language (${languageValue})`);
     else if (languageValue) report.manual.push({ field: "Language", value: languageValue });
+    if (languageValue) keepSelected(FIELDS.language, languageValue);
 
     const price = findField(FIELDS.price);
     if (price && item.price != null) {
@@ -394,7 +460,7 @@ export const vinted: Adapter = {
       report.filled.push(`Parcel size (${VINTED_PACKAGE_LABELS[packageSize]})`);
     } else {
       // The sizes only appear once a category is picked; if the seller does that by hand, keep watching.
-      void waitFor(() => (selectPackageSize(packageSize) ? true : null), 10 * 60_000, 1000);
+      watch(() => selectPackageSize(packageSize), 1000, 10 * 60_000);
       report.manual.push({ field: "Parcel size", value: `${VINTED_PACKAGE_LABELS[packageSize]} (picked for you once the sizes appear)` });
     }
     return report;
