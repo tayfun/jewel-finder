@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
 export type Theme = "system" | "light" | "dark";
-export const THEMES: Theme[] = ["system", "light", "dark"];
 
 const KEY = "jf.theme";
 const listeners = new Set<(t: Theme) => void>();

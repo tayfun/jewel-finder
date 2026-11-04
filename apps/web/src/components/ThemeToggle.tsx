@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { THEMES, useTheme, type Theme } from "../theme";
+import { useTheme, type Theme } from "../theme";
 
 const ICONS: Record<Theme, string> = { system: "◐", light: "☀", dark: "☾" };
 const LABELS: Record<Theme, string> = { system: "System", light: "Light", dark: "Dark" };
@@ -37,13 +37,14 @@ function useEffectiveTheme(theme: Theme): "light" | "dark" {
   return theme === "system" ? (osDark ? "dark" : "light") : theme;
 }
 
-/** Segmented control for the settings page. */
+/** Light / dark picker for the settings page. Until one is picked, the device's setting is used. */
 export function ThemePicker() {
   const [theme, setTheme] = useTheme();
+  const shown = useEffectiveTheme(theme);
   return (
     <div className="segmented" role="radiogroup" aria-label="Theme">
-      {THEMES.map((t) => (
-        <button key={t} role="radio" aria-checked={theme === t} className={theme === t ? "active" : ""} onClick={() => setTheme(t)}>
+      {(["light", "dark"] as const).map((t) => (
+        <button key={t} role="radio" aria-checked={shown === t} className={shown === t ? "active" : ""} onClick={() => setTheme(t)}>
           <span aria-hidden="true">{ICONS[t]}</span> {LABELS[t]}
         </button>
       ))}

@@ -90,7 +90,7 @@ export function Settings() {
           <section className="card">
             <h2>Appearance</h2>
             <ThemePicker />
-            <p className="muted small">“System” follows your device's light or dark setting. Saved on this browser.</p>
+            <p className="muted small">Starts with your device's light or dark setting. Your choice is saved on this browser.</p>
           </section>
           <section className="card">
             <h2>Chrome extension</h2>
