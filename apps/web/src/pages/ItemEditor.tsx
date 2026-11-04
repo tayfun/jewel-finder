@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { api } from "../api";
 import { ItemForm } from "../components/ItemForm";
 import { useLoad } from "../hooks";
+import { Loader } from "../components/Loader";
 
 export function NewItem() {
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ export function EditItem() {
   const navigate = useNavigate();
   const { data: item, error } = useLoad(() => api<ItemWithListings>(`/api/items/${id}`), [id]);
   if (error) return <p className="error">{error.message}</p>;
-  if (!item) return <p className="muted">Loading…</p>;
+  if (!item) return <Loader label="Loading item…" />;
   return (
     <>
       <div className="page-head">

@@ -3,11 +3,12 @@ import { NavLink, Navigate, Outlet, useLocation } from "react-router";
 import { useAuth } from "../auth";
 import { useExtensionReloaded } from "../extension";
 import { ThemeToggle } from "./ThemeToggle";
+import { Loader } from "./Loader";
 
 export function RequireAuth() {
   const { account, loading } = useAuth();
   const location = useLocation();
-  if (loading) return <div className="center muted">Loading…</div>;
+  if (loading) return <Loader full label="Loading Jewel Finder…" />;
   if (!account) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   return <Layout />;
 }

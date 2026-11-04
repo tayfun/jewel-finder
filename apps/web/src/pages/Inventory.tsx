@@ -6,6 +6,7 @@ import { ListingBadges, STATUS_LABELS, StatusBadge } from "../components/Badges"
 import { useItemChanges } from "../extension";
 import { useDebounced, useLoad } from "../hooks";
 import { useState } from "react";
+import { Loader } from "../components/Loader";
 
 export function Inventory() {
   const { settings } = useAccount();
@@ -122,6 +123,7 @@ export function Inventory() {
       </div>
 
       {items.error && <p className="error">{items.error.message}</p>}
+      {!items.data && !items.error && <Loader label="Loading your inventory…" />}
       {items.data && items.data.length === 0 && (
         <div className="empty card">
           {query || status !== "in_stock" ? (

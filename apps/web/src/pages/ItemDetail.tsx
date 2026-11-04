@@ -24,6 +24,7 @@ import { StatusBadge } from "../components/Badges";
 import { Lightbox } from "../components/Lightbox";
 import { delistViaExtension, listViaExtension, relistViaExtension, useExtension, useItemChanges } from "../extension";
 import { useLoad } from "../hooks";
+import { Loader } from "../components/Loader";
 
 export function ItemDetail() {
   const { id } = useParams();
@@ -59,7 +60,7 @@ export function ItemDetail() {
   }, [imageCount, viewer]);
 
   if (error) return <p className="error">{error.message}</p>;
-  if (!item) return <p className="muted">Loading…</p>;
+  if (!item) return <Loader label="Loading item…" />;
 
   async function act(fn: () => Promise<unknown>) {
     setActionError(null);
