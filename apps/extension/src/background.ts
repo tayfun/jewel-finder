@@ -1,4 +1,6 @@
 import {
+  ITEMS_CHANGED_KEY,
+  type ItemsChanged,
   COMP_SOURCE_LABELS,
   COMP_SOURCE_MARKETPLACE,
   MARKETPLACE_LABELS,
@@ -69,6 +71,11 @@ function tabOf(sender: chrome.runtime.MessageSender): number {
 
 async function jobFor(sender: chrome.runtime.MessageSender): Promise<Job | null> {
   return (await getJobs())[tabOf(sender)] ?? null;
+}
+
+/** Tells open Jewel Finder pages to reload (the bridge content script watches this key). */
+async function itemsChanged(itemId: string) {
+  await chrome.storage.local.set({ [ITEMS_CHANGED_KEY]: { itemId, at: Date.now() } satisfies ItemsChanged });
 }
 
 /** Use the web app's session when launched from it and we're signed out or signed in as someone else. */
@@ -189,6 +196,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
       method: "PUT",
       json: { status: "pending", price: item.price, error: null },
     });
+    await itemsChanged(itemId);
     const tab = await chrome.tabs.create({ url: sellUrl(marketplace, auth.account.settings, item.title) });
     if (tab.id == null) throw new Error("Couldn't open a tab");
     await setJob(tab.id, { kind: "list", itemId, marketplace, startedAt: Date.now() });
@@ -277,7 +285,9 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
   },
 
   async SET_PRICE({ itemId, price }) {
-    return api<ItemWithListings>(`/api/items/${itemId}`, { method: "PATCH", json: { price } });
+    const item = await api<ItemWithListings>(`/api/items/${itemId}`, { method: "PATCH", json: { price } });
+    await itemsChanged(itemId);
+    return item;
   },
 
   async COMPS_FOUND({ comps, problem }, sender) {
@@ -325,6 +335,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
         error: replacing ? `Previous listing still live: ${old!.url}. Delete it so the item can't sell twice.`.slice(0, 500) : null,
       },
     });
+    await itemsChanged(job.itemId);
     if (replacing) {
       await setJob(tabOf(sender), { ...job, kind: "cleanup", startedAt: Date.now() });
       return { next: old!.url };
@@ -342,6 +353,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
       const current = item.listings.find((l) => l.marketplace === job.marketplace);
       if (current) {
         await api(`/api/items/${job.itemId}/listings/${job.marketplace}`, { method: "PUT", json: { status: current.status, error: null } });
+        await itemsChanged(job.itemId);
       }
       await setJob(tabOf(sender), null);
       return null;
@@ -350,6 +362,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
       method: "PUT",
       json: { status: "ended", error: null },
     });
+    await itemsChanged(job.itemId);
     await setJob(tabOf(sender), null);
     return null;
   },
@@ -363,6 +376,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
     const item = await api<ItemWithListings>(`/api/items/${job.itemId}`);
     if (item.listings.find((l) => l.marketplace === job.marketplace)?.status === "pending") {
       await api(`/api/items/${job.itemId}/listings/${job.marketplace}`, { method: "DELETE" });
+      await itemsChanged(job.itemId);
     }
     return null;
   },
@@ -420,6 +434,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
     });
     const result = results[0];
     if (!result) throw new Error("Import failed");
+    await itemsChanged(result.itemId);
     return {
       itemId: result.itemId,
       created: result.created,

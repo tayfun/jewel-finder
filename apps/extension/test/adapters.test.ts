@@ -86,6 +86,96 @@ describe("vinted adapter", () => {
   }, 15_000);
 });
 
+describe("vinted adapter: books", () => {
+  // Vinted's parcel cells as of Nov 2026, trimmed. Medium comes pre-selected as "Recommended".
+  const parcels = `<div id="package_size">${["Small", "Medium", "Large"]
+    .map(
+      (size, i) => `<div data-testid="${i + 1}-package-size--cell">
+        <div data-testid="${i + 1}-package-size--cell--title">${i === 1 ? '<div><div>Recommended</div></div>' : ""}<span>${size}</span></div>
+        <div data-testid="${i + 1}-package-size--cell--content">For items that'd fit in a box.</div>
+        <div data-testid="${i + 1}-package-size--cell--suffix"><label for="p${i + 1}"><input id="p${i + 1}" type="radio" name="package_type_selector_${i + 1}" ${i === 1 ? "checked" : ""}></label></div>
+      </div>`,
+    )
+    .join("")}</div>`;
+
+  it("picks the book category, then fills ISBN and defaults the parcel to Small", async () => {
+    document.body.innerHTML = `
+      <input id="title" data-testid="title--input">
+      <textarea id="description" data-testid="description--input"></textarea>
+      <button type="button" data-testid="catalog-select-dropdown-input"><span>Select a category</span></button>
+      <input id="price" data-testid="price-input--input">`;
+    const trigger = document.querySelector<HTMLElement>('[data-testid="catalog-select-dropdown-input"]')!;
+    // Opening the picker shows a search box; searching lists matching leaves with their parent path.
+    trigger.addEventListener("click", () => {
+      trigger.insertAdjacentHTML(
+        "afterend",
+        `<div data-testid="catalog-select-dropdown-content"><input id="catalog-search-input"><ul></ul></div>`,
+      );
+      const search = document.getElementById("catalog-search-input") as HTMLInputElement;
+      search.addEventListener("input", () => {
+        const rows = [
+          ["Fiction", "Books & Media > Books"],
+          ["Non-fiction", "Books & Media > Books"],
+          ["Science fiction films", "Books & Media > Video"],
+        ].filter(([name]) => name!.toLowerCase().includes(search.value.toLowerCase()));
+        document.querySelector('[data-testid="catalog-select-dropdown-content"] ul')!.innerHTML = rows
+          .map(([name, parent]) => `<li><div role="radio" data-name="${name}"><div>${name}</div><div>${parent}</div></div></li>`)
+          .join("");
+      });
+    });
+    document.addEventListener("click", (e) => {
+      const row = (e.target as Element).closest<HTMLElement>("[role=radio][data-name]");
+      if (!row) return;
+      trigger.querySelector("span")!.textContent = row.dataset.name!;
+      document.querySelector('[data-testid="catalog-select-dropdown-content"]')!.remove();
+      // Choosing a book category brings up ISBN and the parcel sizes.
+      trigger.insertAdjacentHTML("afterend", `<input data-testid="isbn--input">${parcels}`);
+    });
+    // Each radio has its own name, so Vinted's code (not the browser) unchecks the others.
+    document.addEventListener("change", (e) => {
+      const picked = e.target as HTMLInputElement;
+      if (!picked.name?.startsWith("package_type_selector_")) return;
+      for (const r of document.querySelectorAll<HTMLInputElement>('input[name^="package_type_selector_"]')) r.checked = r === picked;
+    });
+
+    const book = {
+      ...item,
+      title: "Margaret Atwood The Handmaid's Tale PB Vintage 1996",
+      category: "Media › Books, Comics & Magazines › Books",
+      tags: ["novel"],
+      brand: "",
+      size: "",
+      colour: "",
+      packageSize: null,
+      weightGrams: null,
+      book: { isbn: "9780099740919" } as ItemWithListings["book"],
+    };
+    const report = await vinted.fill({ ...ctx("vinted"), item: book }, []);
+    expect(trigger.textContent).toBe("Fiction");
+    expect(report.filled).toContain("Category (Fiction)");
+    expect(document.querySelector<HTMLInputElement>('[data-testid="isbn--input"]')!.value).toBe("9780099740919");
+    expect(report.filled).toContain("Parcel size (Small)");
+    expect([1, 2, 3].map((i) => (document.getElementById(`p${i}`) as HTMLInputElement).checked)).toEqual([true, false, false]);
+  }, 15_000);
+});
+
+describe("vinted adapter: after publishing", () => {
+  it("closes the 'Item listed · List another' promo with Later", async () => {
+    let closed = "";
+    setTimeout(() => {
+      document.body.innerHTML = `
+        <div class="ReactModal__Overlay"><div role="dialog" aria-modal="true">
+          <h1>Item listed</h1><span>The more listings you have, the easier it is for buyers to find you.</span>
+          <button type="button" data-testid="list-promotion-submit-cta"><span>List another</span></button>
+          <button type="button" data-testid="list-promotion-cancel-cta"><span>Later</span></button>
+        </div></div>`;
+      for (const b of document.querySelectorAll("button")) b.addEventListener("click", () => (closed = b.textContent ?? ""));
+    }, 300);
+    await vinted.afterPublished!();
+    expect(closed).toBe("Later");
+  });
+});
+
 describe("ebay adapter", () => {
   it("recognises pages", () => {
     expect(ebay.isSellPage(new URL("https://www.ebay.co.uk/lstng?draftId=1&mode=AddItem"))).toBe(true);

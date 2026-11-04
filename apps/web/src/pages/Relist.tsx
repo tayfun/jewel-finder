@@ -3,15 +3,16 @@ import {
   formatMoney,
   isStale,
   listingAgeDays,
+  mergeChangedItems,
   relistAfterDays,
   type ItemWithListings,
   type Listing,
 } from "@jf/shared";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { api } from "../api";
+import { api, fetchItems } from "../api";
 import { useAccount } from "../auth";
-import { relistViaExtension, useExtension } from "../extension";
+import { relistViaExtension, useExtension, useItemChanges } from "../extension";
 import { useLoad } from "../hooks";
 
 /** Each relist opens a tab with a form to check and publish, so don't open dozens at once. */
@@ -30,6 +31,10 @@ export function Relist() {
   const { settings } = useAccount();
   const extension = useExtension();
   const items = useLoad(() => api<{ items: ItemWithListings[] }>("/api/items?status=in_stock").then((r) => r.items), []);
+  useItemChanges(async (ids) => {
+    const changed = await fetchItems(ids);
+    items.setData((list) => list && mergeChangedItems(list, changed, (i) => i.status === "in_stock"));
+  });
   const [showAll, setShowAll] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);

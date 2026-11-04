@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EBAY_CONDITION_LABELS,
+  vintedCategory,
   conditionFromText,
   ebayPackageSize,
   isStale,
@@ -169,5 +170,41 @@ describe("staleness", () => {
     expect(isStale({ status: "sold" }, live("vinted", 90), settings, now)).toBe(false);
     expect(isStale({ status: "in_stock" }, { ...live("vinted", 90), status: "ending" }, settings, now)).toBe(false);
     expect(isStale({ status: "in_stock" }, { ...live("vinted", 90), listedAt: null }, settings, now)).toBe(false);
+  });
+});
+
+describe("vintedCategory", () => {
+  const books = "Media › Books, Comics & Magazines › Books";
+  const cat = (title: string, category = books, extra: { tags?: string[]; book?: boolean } = {}) =>
+    vintedCategory({ title, category, tags: extra.tags ?? [], book: extra.book ? ({} as never) : null })?.name ?? null;
+
+  it("files books by what the title and tags say", () => {
+    expect(cat("Connell Guides The Connell Guide to King Lear PB 2018")).toBe("Non-fiction");
+    expect(cat("Oxford University Press Thought: VSI Tim Bayne PB 2013")).toBe("Non-fiction");
+    expect(cat("Oxford Student Texts W. B. Yeats Selected Poems OUP 2011")).toBe("Fiction");
+    expect(cat("Margaret Atwood The Handmaid's Tale", books, { tags: ["novel", "dystopia"] })).toBe("Fiction");
+    expect(cat("Isaac Asimov Foundation science fiction PB")).toBe("Fiction");
+  });
+
+  it("leaves a book it can't place to the seller", () => {
+    expect(cat("Elif Şafak Baba ve Piç Doğan Kitap Paperback")).toBeNull();
+    expect(cat("A novel guide")).toBeNull();
+  });
+
+  it("uses the category for comics, magazines, textbooks and children's books", () => {
+    expect(cat("Asterix", "Media › Books, Comics & Magazines › Comic Books & Memorabilia › Comics")).toBe("Comics, manga & graphic novels");
+    expect(vintedCategory({ title: "Wired", category: "Media › Books, Comics & Magazines › Magazines", tags: [], book: null })).toEqual({
+      name: "Magazines",
+      parent: "Books & Media",
+    });
+    expect(cat("GCSE Maths", "Media › Books, Comics & Magazines › Textbooks, Education & Reference › School Textbooks & Study Guides")).toBe(
+      "Textbooks & study materials",
+    );
+    expect(cat("The Gruffalo", "Books › Children's Books")).toBe("Kids");
+  });
+
+  it("ignores items that aren't books", () => {
+    expect(cat("Levi's 501", "Men › Jeans")).toBeNull();
+    expect(cat("Mystery novel", "", { book: true })).toBe("Fiction");
   });
 });

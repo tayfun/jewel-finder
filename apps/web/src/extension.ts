@@ -5,7 +5,7 @@ import {
   type Marketplace,
   type WebToExtension,
 } from "@jf/shared";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getToken } from "./api";
 
 /** Chrome Web Store listing, once published (VITE_EXTENSION_URL in apps/web/.env). */
@@ -24,6 +24,38 @@ function onMessage(handler: (msg: ExtensionToWeb) => void): () => void {
   };
   window.addEventListener("message", listener);
   return () => window.removeEventListener("message", listener);
+}
+
+/**
+ * Calls `onChanged` with the ids of items the extension just changed (e.g. a listing it recorded after you
+ * published on Vinted). Batched, since an import changes many items in a row: it fires once things go quiet
+ * for `waitMs`, or every `maxWaitMs` during a long run.
+ */
+export function useItemChanges(onChanged: (ids: string[]) => void, waitMs = 500, maxWaitMs = 3000) {
+  const latest = useRef(onChanged);
+  latest.current = onChanged;
+  useEffect(() => {
+    let pending = new Set<string>();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let firstAt = 0;
+    const flush = () => {
+      const ids = [...pending];
+      pending = new Set();
+      timer = undefined;
+      if (ids.length) latest.current(ids);
+    };
+    const off = onMessage((msg) => {
+      if (msg.type !== "ITEMS_CHANGED" || !msg.itemId) return;
+      if (!pending.size) firstAt = Date.now();
+      pending.add(msg.itemId);
+      clearTimeout(timer);
+      timer = setTimeout(flush, Math.max(0, Math.min(waitMs, firstAt + maxWaitMs - Date.now())));
+    });
+    return () => {
+      off();
+      clearTimeout(timer);
+    };
+  }, [waitMs, maxWaitMs]);
 }
 
 /** null while checking, then the extension version or false if it isn't installed. */

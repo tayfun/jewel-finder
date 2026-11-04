@@ -22,7 +22,7 @@ import { Autofill } from "../components/Autofill";
 import { Pricing } from "../components/Pricing";
 import { StatusBadge } from "../components/Badges";
 import { Lightbox } from "../components/Lightbox";
-import { delistViaExtension, listViaExtension, relistViaExtension, useExtension } from "../extension";
+import { delistViaExtension, listViaExtension, relistViaExtension, useExtension, useItemChanges } from "../extension";
 import { useLoad } from "../hooks";
 
 export function ItemDetail() {
@@ -30,6 +30,9 @@ export function ItemDetail() {
   const navigate = useNavigate();
   const { settings } = useAccount();
   const { data: item, setData, error, reload } = useLoad(() => api<ItemWithListings>(`/api/items/${id}`), [id]);
+  useItemChanges((ids) => {
+    if (id && ids.includes(id)) void reload();
+  });
   const [photo, setPhoto] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [autofill, setAutofill] = useState(false);

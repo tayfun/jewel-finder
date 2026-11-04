@@ -80,6 +80,22 @@ describe("dropdowns", () => {
     expect(findOption("Good cond")?.id).toBe("a");
   });
 
+  it("finds Vinted's condition cells (role=radio in a menu) by their title", () => {
+    const cell = (id: number, title: string, body: string) =>
+      `<div role="radio" data-testid="condition-${id}"><div data-testid="condition-${id}--title">${title}</div>` +
+      `<div data-testid="condition-${id}--content">${body}</div><label><input type="radio"></label></div>`;
+    document.body.innerHTML = `
+      <div role="radio" id="elsewhere">Good</div>
+      <div role="menu"><div role="group">
+        ${cell(6, "New with tags", "A brand-new, unused item with tags attached.")}
+        ${cell(2, "Very good", "A lightly used item that may have slight imperfections.")}
+        ${cell(3, "Good", "A used item that may show imperfections and signs of wear.")}
+      </div></div>`;
+    expect(findOption("Good")?.dataset.testid).toBe("condition-3");
+    expect(findOption("Very good")?.dataset.testid).toBe("condition-2");
+    expect(findOption("New with tags")?.dataset.testid).toBe("condition-6");
+  });
+
   it("opens a dropdown and clicks the matching option", async () => {
     document.body.innerHTML = `<input id="c" readonly><div id="menu"></div>`;
     const trigger = document.getElementById("c") as HTMLInputElement;

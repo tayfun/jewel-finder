@@ -78,6 +78,45 @@ export function vintedPackageSize(item: { packageSize: PackageSize | null; weigh
   return bump<VintedPackageSize>(size, item.weightGrams, { small: 2000, medium: 5000 }, ["small", "medium", "large"]);
 }
 
+/** A leaf in Vinted's category tree, as its search shows it: "Fiction" under "Books & Media > Books". */
+export interface VintedCategory {
+  name: string;
+  parent: string;
+}
+
+const BOOKS = "Books & Media > Books";
+const has = (re: RegExp, ...texts: string[]) => texts.some((t) => re.test(t));
+
+/**
+ * Where an item goes on Vinted, from our category (usually an eBay path like "Media › Books, Comics &
+ * Magazines › Books") and the title/tags. Only books, comics and magazines for now. A book that doesn't say
+ * whether it's fiction gives null: the seller picks, rather than us filing a novel under Non-fiction.
+ */
+export function vintedCategory(item: Pick<Item, "category" | "title" | "tags" | "book">): VintedCategory | null {
+  const path = item.category.toLowerCase();
+  // eBay's umbrella "Books, Comics & Magazines" says nothing about which of the three it is.
+  const category = path.replace(/books,? comics,? (&|and) magazines/g, "");
+  const words = [item.title, ...item.tags].join(" ").toLowerCase();
+  if (!item.book && !has(/\b(books?|magazines?|comics?|manga|graphic novels?)\b/, path)) return null;
+
+  if (has(/\bmagazines?\b/, category)) return { name: "Magazines", parent: "Books & Media" };
+  if (has(/\b(comics?|manga|graphic novels?)\b/, category, words)) return { name: "Comics, manga & graphic novels", parent: BOOKS };
+  if (has(/\b(text ?books?|study guides?|revision)\b/, category, words)) return { name: "Textbooks & study materials", parent: BOOKS };
+  if (has(/\b(colou?ring|puzzle|activity) books?\b/, category, words)) return { name: "Colouring, puzzle & activity books", parent: BOOKS };
+  if (has(/\b(young adults?|ya|teen)\b/, category)) return { name: "Young adults", parent: `${BOOKS} > Kids & young adults` };
+  if (has(/\b(children'?s|kids)\b/, category)) return { name: "Kids", parent: `${BOOKS} > Kids & young adults` };
+
+  if (has(/\bnon-?fiction\b/, category, words)) return { name: "Non-fiction", parent: BOOKS };
+  if (has(/\bfiction\b/, category) || has(/\bscience fiction\b/, words)) return { name: "Fiction", parent: BOOKS };
+  const fiction = has(/\b(novels?|fiction|poems|poetry|plays|short stories|thriller|crime|mystery|fantasy|sci-?fi|romance)\b/, words);
+  const nonFiction = has(
+    /\b(guides?|history|biography|memoir|cook ?book|recipes?|dictionary|handbook|introduction|vsi|essays|science|philosophy|travel|atlas)\b/,
+    words,
+  );
+  if (fiction !== nonFiction) return { name: fiction ? "Fiction" : "Non-fiction", parent: BOOKS };
+  return null;
+}
+
 /** Checks an ISBN-10/13 check digit (input already stripped of spaces and hyphens). */
 export function isValidIsbn(isbn: string): boolean {
   if (/^\d{9}[\dX]$/.test(isbn)) {

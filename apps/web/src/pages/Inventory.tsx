@@ -1,8 +1,9 @@
-import { formatMoney, ITEM_STATUSES, type ItemStatus, type ItemWithListings, type Stats } from "@jf/shared";
+import { formatMoney, ITEM_STATUSES, mergeChangedItems, type ItemStatus, type ItemWithListings, type Stats } from "@jf/shared";
 import { Link, useSearchParams } from "react-router";
-import { api } from "../api";
+import { api, fetchItems } from "../api";
 import { useAccount } from "../auth";
 import { ListingBadges, STATUS_LABELS, StatusBadge } from "../components/Badges";
+import { useItemChanges } from "../extension";
 import { useDebounced, useLoad } from "../hooks";
 import { useState } from "react";
 
@@ -20,6 +21,14 @@ export function Inventory() {
     if (status !== "all") sp.set("status", status);
     return api<{ items: ItemWithListings[] }>(`/api/items?${sp}`).then((r) => r.items);
   }, [query, status]);
+
+  // The extension changed some items (e.g. recorded a Vinted listing): refetch just those, and the counts.
+  useItemChanges(async (ids) => {
+    void stats.reload();
+    const changed = await fetchItems(ids);
+    // A search runs on the server, so an item new to the list only shows up when there's no search.
+    items.setData((list) => list && mergeChangedItems(list, changed, (i) => status === "all" || i.status === status, !query));
+  });
 
   function setStatus(s: string) {
     const next = new URLSearchParams(params);

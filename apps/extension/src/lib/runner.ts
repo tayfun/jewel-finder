@@ -19,6 +19,13 @@ export interface Adapter {
   fill(ctx: JobContext, photos: File[]): Promise<FillReport>;
   /** Spot a published listing on the current page. Only consulted after we've filled a form in this tab. */
   detectPublished(url: URL, doc: Document): Published | null;
+  /**
+   * For marketplaces that don't show the new listing after publishing (Vinted): calls back with it when
+   * the page publishes one. Only acted on after we've filled a form in this tab.
+   */
+  watchPublished?(onPublished: (published: Published) => void): void;
+  /** Tidies up after publishing, e.g. closes Vinted's "Item listed · List another" promo. */
+  afterPublished?(): Promise<void>;
   /** Ending a live listing (cross-delisting). */
   delist: Delister;
   /** Bringing the seller's existing listings into the inventory. */
@@ -54,6 +61,17 @@ export interface Delister {
 
 // sessionStorage is per tab and survives the full-page navigations marketplaces do after submit.
 const filledKey = (ctx: JobContext) => `jewel-finder.filled.${ctx.job.itemId}.${ctx.job.marketplace}`;
+// A listing reported by watchPublished, kept in case the page navigates away before we've saved it.
+const publishedKey = (ctx: JobContext) => `jewel-finder.published.${ctx.job.itemId}.${ctx.job.marketplace}`;
+
+function storedPublished(ctx: JobContext): Published | null {
+  try {
+    const p = JSON.parse(sessionStorage.getItem(publishedKey(ctx)) ?? "null") as Published | null;
+    return p?.url && p.externalId ? p : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function run(adapter: Adapter): Promise<void> {
   let ctx: JobContext | null;
@@ -79,29 +97,39 @@ export async function run(adapter: Adapter): Promise<void> {
     relist ? "Cancel relisting (keeps the old listing)" : "Cancel this listing",
   );
 
+  async function publish(published: Published) {
+    if (finished) return;
+    finished = true;
+    void adapter.afterPublished?.().catch(() => {});
+    try {
+      const { next } = await send({ type: "JOB_PUBLISHED", ...published });
+      sessionStorage.removeItem(filledKey(job));
+      sessionStorage.removeItem(publishedKey(job));
+      if (next) {
+        showBanner({ kind: "working", title, message: "Relisted! Now opening the old listing to remove it…" });
+        setTimeout(() => location.assign(next), 1500);
+      } else {
+        showBanner({ kind: "done", title, message: "Listed! Saved to your Jewel Finder inventory." });
+      }
+    } catch (e) {
+      showBanner({ kind: "error", title, message: `Listed, but couldn't update Jewel Finder: ${(e as Error).message}` });
+    }
+  }
+
+  adapter.watchPublished?.((published) => {
+    if (!sessionStorage.getItem(filledKey(job))) return;
+    sessionStorage.setItem(publishedKey(job), JSON.stringify(published));
+    void publish(published);
+  });
+
   async function handle() {
     if (finished || location.href === handledHref) return;
     handledHref = location.href;
     const url = new URL(location.href);
 
     if (sessionStorage.getItem(filledKey(job))) {
-      const published = adapter.detectPublished(url, document);
-      if (published) {
-        finished = true;
-        try {
-          const { next } = await send({ type: "JOB_PUBLISHED", ...published });
-          sessionStorage.removeItem(filledKey(job));
-          if (next) {
-            showBanner({ kind: "working", title, message: "Relisted! Now opening the old listing to remove it…" });
-            setTimeout(() => location.assign(next), 1500);
-          } else {
-            showBanner({ kind: "done", title, message: "Listed! Saved to your Jewel Finder inventory." });
-          }
-        } catch (e) {
-          showBanner({ kind: "error", title, message: `Listed, but couldn't update Jewel Finder: ${(e as Error).message}` });
-        }
-        return;
-      }
+      const published = storedPublished(job) ?? adapter.detectPublished(url, document);
+      if (published) return publish(published);
     }
 
     if (adapter.isSellPage(url)) {

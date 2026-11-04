@@ -1,4 +1,4 @@
-import { BRIDGE_EXT, BRIDGE_WEB, type ExtensionToWeb, type WebToExtension } from "@jf/shared";
+import { BRIDGE_EXT, BRIDGE_WEB, ITEMS_CHANGED_KEY, type ExtensionToWeb, type ItemsChanged, type WebToExtension } from "@jf/shared";
 import { send } from "../messages";
 
 // Runs on the Jewel Finder web app only. Relays window.postMessage requests to the background.
@@ -38,6 +38,13 @@ window.addEventListener("message", (e: MessageEvent<WebToExtension>) => {
       (err: Error) => reply({ source: BRIDGE_EXT, type: "LIST_RESULT", requestId: msg.requestId, ok: false, error: err.message }),
     );
   }
+});
+
+// The background bumps this key whenever it changes items, so open pages can reload.
+chrome.storage.onChanged.addListener((changes, area) => {
+  const change = changes[ITEMS_CHANGED_KEY];
+  if (area !== "local" || !change?.newValue) return;
+  reply({ source: BRIDGE_EXT, type: "ITEMS_CHANGED", itemId: (change.newValue as ItemsChanged).itemId });
 });
 
 // Announce ourselves in case the page asked before we loaded.

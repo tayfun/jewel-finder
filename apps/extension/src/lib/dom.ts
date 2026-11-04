@@ -109,22 +109,29 @@ const OPTION_SELECTORS = [
   "[role=option]",
   "[role=menuitem]",
   "[role=menuitemradio]",
+  // Vinted's condition menu: a role=menu of role=radio cells with a title and a description.
+  "[role=menu] [role=radio]",
+  "[role=listbox] [role=radio]",
   "[data-testid*=dropdown-row]",
   "[data-testid*=option]",
   "li",
 ];
 
-/** Finds a visible dropdown option whose text matches `text` (exact first, then prefix). */
+/** Finds a visible dropdown option whose text matches `text` (exact first, then title or first line, then prefix). */
 export function findOption(text: string, root: ParentNode = document): HTMLElement | null {
   const want = normalize(text);
   const candidates: HTMLElement[] = [];
   for (const sel of OPTION_SELECTORS) {
     for (const el of root.querySelectorAll<HTMLElement>(sel)) candidates.push(el);
   }
-  const textOf = (el: HTMLElement) => normalize(el.innerText ?? el.textContent);
+  const raw = (el: HTMLElement) => el.innerText ?? el.textContent ?? "";
+  const textOf = (el: HTMLElement) => normalize(raw(el));
+  // An option with a description under its name: "Very good" + "A lightly used item…".
+  const titleOf = (el: HTMLElement) =>
+    normalize(el.querySelector('[data-testid$="--title"]')?.textContent ?? raw(el).split(/\n| {2,}/)[0]);
   return (
     candidates.find((el) => textOf(el) === want) ??
-    candidates.find((el) => textOf(el).split(/\n| {2,}/)[0] === want) ??
+    candidates.find((el) => titleOf(el) === want) ??
     candidates.find((el) => textOf(el).startsWith(want)) ??
     null
   );
@@ -160,7 +167,7 @@ export async function pickOption(trigger: HTMLElement, text: string, timeoutMs =
 const CHOICE_SELECTORS = "input[type=radio], [role=radio], [role=option], label, button, li, [data-testid]";
 
 /** Text of all text nodes joined with spaces, so "<b>Small</b><span>Up to 2 kg</span>" reads "small up to 2 kg". */
-function spacedText(el: Element): string {
+export function spacedText(el: Element): string {
   const parts: string[] = [];
   const walker = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) parts.push(n.nodeValue ?? "");

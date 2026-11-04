@@ -1,4 +1,4 @@
-import type { ApiError } from "@jf/shared";
+import type { ApiError, ItemWithListings } from "@jf/shared";
 
 const TOKEN_KEY = "jf.token";
 
@@ -48,4 +48,19 @@ export async function api<T>(
     throw new HttpError(res.status, data as ApiError);
   }
   return data as T;
+}
+
+/** Fetches these items one by one: id → item, or null if it's gone. Items that fail otherwise are left out. */
+export async function fetchItems(ids: string[]): Promise<Map<string, ItemWithListings | null>> {
+  const out = new Map<string, ItemWithListings | null>();
+  await Promise.all(
+    ids.map(async (id) => {
+      try {
+        out.set(id, await api<ItemWithListings>(`/api/items/${id}`));
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 404) out.set(id, null);
+      }
+    }),
+  );
+  return out;
 }

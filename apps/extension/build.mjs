@@ -37,6 +37,8 @@ const manifest = {
   host_permissions: [`${API_URL}/*`, "https://*.vinted.net/*", "https://i.ebayimg.com/*", "https://*.ebaydesc.com/*"],
   content_scripts: [
     { matches: VINTED.map((tld) => `https://www.vinted.${tld}/*`), js: ["vinted.js"], run_at: "document_idle" },
+    // In the page's own world, before Vinted's code runs: sees the upload response for the new item's id.
+    { matches: VINTED.map((tld) => `https://www.vinted.${tld}/*`), js: ["vinted-page.js"], run_at: "document_start", world: "MAIN" },
     { matches: EBAY.map((tld) => `https://www.ebay.${tld}/*`), js: ["ebay.js"], run_at: "document_idle", all_frames: false },
     { matches: [appPattern], js: ["bridge.js"], run_at: "document_start" },
   ],
@@ -64,6 +66,7 @@ const builds = [
     ...common,
     entryPoints: {
       vinted: "src/content/vinted.ts",
+      "vinted-page": "src/content/vinted-page.ts",
       ebay: "src/content/ebay.ts",
       bridge: "src/content/bridge.ts",
       sidepanel: "src/sidepanel/sidepanel.ts",

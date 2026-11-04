@@ -45,6 +45,20 @@ marketplace's sell page and fills photos, title, description, price and whatever
 finish the remaining fields shown in the on-page panel and press the marketplace's own button → the
 extension records the listing URL back in your inventory.
 
+On Vinted:
+- **Category:** picked for books, comics and magazines, from the item's category plus title and tags
+  (`vintedCategory` in `packages/shared`). A book is filed under Fiction or Non-fiction only when words
+  like "novel" or "guide" say which; otherwise you pick.
+- **Parcel size:** Small unless the item's own package size or weight says bigger.
+- **Recording the listing:** Vinted stays on your profile after Upload instead of opening the new item, so
+  the extension reads the new item's id from the upload request (`content/vinted-page.ts`, in the page's
+  own world).
+
+Open Jewel Finder pages (Inventory, the item, Relist) update by themselves: whenever the extension changes
+an item it writes that item's id to `itemsChanged` in `chrome.storage.local`, and the bridge content script
+passes it on to the page as `ITEMS_CHANGED`. Pages refetch only the changed items (batched, for imports) and
+swap them into the list in place (`mergeChangedItems`); Inventory also refreshes its counts.
+
 ### Cross-delisting
 
 Mark an item sold ("Sold on Vinted/eBay/elsewhere") → its other live listings become "Needs ending" and

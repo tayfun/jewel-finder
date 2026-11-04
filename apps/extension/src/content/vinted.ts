@@ -5,7 +5,9 @@ import {
   parseListingUrl,
   priceToMinor,
   toDecimal,
+  vintedCategory,
   vintedPackageSize,
+  type VintedCategory,
   type VintedPackageSize,
 } from "@jf/shared";
 import type { FillReport, JobContext } from "../messages";
@@ -18,12 +20,14 @@ import {
   normalize,
   pickOption,
   setValue,
+  spacedText,
   sleep,
   waitFor,
   type FieldSpec,
 } from "../lib/dom";
 import { runImport } from "../lib/importer";
 import { run, type Adapter, type Importer } from "../lib/runner";
+import { isUploadedMessage } from "../lib/vinted-upload";
 import { breadcrumbs, first, imgUrl, labelledValue, ldImages, ldOfType, ldText, meta, text, textOf, uniquePhotos } from "../lib/scrape";
 
 // Vinted's upload form (/items/new). Several strategies per field because the DOM changes without notice.
@@ -39,8 +43,15 @@ export const FIELDS = {
     selectors: ['[data-testid="brand-select-dropdown-input"]', "#brand", 'input[name="brand"]'],
     labels: [/^brand$/],
   },
+  // A searchable picker: the trigger opens a panel with its own search box.
+  category: {
+    selectors: ['[data-testid="catalog-select-dropdown-input"]', "#catalog_id", 'input[name="catalog"]'],
+    labels: [/^category$/],
+  },
+  // Book categories only.
+  isbn: { selectors: ['[data-testid="isbn--input"]', "#isbn", 'input[name="isbn"]'], labels: [/^isbn$/] },
   condition: {
-    selectors: ['[data-testid="condition-select-dropdown-input"]', "#condition", 'input[name="condition"]'],
+    selectors: ['[data-testid="category-condition-single-list-input"]', '[data-testid="condition-select-dropdown-input"]', "#condition", 'input[name="condition"]'],
     labels: [/^condition$/],
   },
   // Books only, and only once a book category is picked.
@@ -73,13 +84,63 @@ function packageSection(): HTMLElement | null {
   return null;
 }
 
+/** Vinted's parcel cells: data-testid="1-package-size--cell" with the size in its title, a radio in its suffix. */
+function packageRadio(size: VintedPackageSize): HTMLElement | null {
+  for (const cell of document.querySelectorAll<HTMLElement>('[data-testid$="-package-size--cell"]')) {
+    const title = normalize(cell.querySelector('[data-testid$="--cell--title"]')?.textContent);
+    // The title also holds badges like "Recommended", so match the size as a word.
+    if (new RegExp(`\\b${size}$`).test(title)) return cell.querySelector<HTMLElement>("input[type=radio]") ?? cell;
+  }
+  return null;
+}
+
 function selectPackageSize(size: VintedPackageSize): boolean {
+  const radio = packageRadio(size);
+  if (radio) {
+    if (!(radio instanceof HTMLInputElement && radio.checked)) click(radio);
+    return true;
+  }
   const section = packageSection();
   const choice = section && findChoice(new RegExp(`^${size}\\b`), section);
   if (!choice) return false;
   click(choice);
   return true;
 }
+
+/**
+ * Picks a category through the picker's search box ("Fiction" also matches "Science fiction", so the
+ * result has to be the one under the right parent). Returns false if it didn't show up.
+ */
+async function pickCategory(category: VintedCategory): Promise<boolean> {
+  const trigger = findField(FIELDS.category);
+  if (!trigger) return false;
+  click(trigger);
+  const search = await waitFor(
+    () => document.querySelector<HTMLInputElement>('#catalog-search-input, [data-testid="catalog-select-dropdown-content"] input'),
+    3000,
+  );
+  if (!search) return false;
+  setValue(search, category.name);
+  const want = new RegExp(`^${escapeRegExp(normalize(category.name))} ${escapeRegExp(normalize(category.parent))}$`);
+  const result = await waitFor(() => {
+    const panel = document.querySelector('[data-testid="catalog-select-dropdown-content"]') ?? search.closest('[role=dialog], [data-testid*="dropdown"]');
+    // Each result is a role=radio row reading "<name> <parent path>"; click the row itself, not its <li>.
+    for (const row of panel?.querySelectorAll<HTMLElement>("[role=radio], [role=option]") ?? []) {
+      if (want.test(spacedText(row))) return row;
+    }
+    return null;
+  }, 5000);
+  if (!result) {
+    search.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    return false;
+  }
+  click(result);
+  // The book fields (ISBN, condition, parcel size) render once a category is in.
+  await sleep(800);
+  return true;
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** The listing to end: a relist's old one, otherwise the item's listing here. */
 const targetOf = (ctx: JobContext): { externalId: string | null; url: string | null } | undefined =>
@@ -171,6 +232,30 @@ export const vinted: Adapter = {
 
   detectPublished: (url) => parseListingUrl("vinted", url.href),
 
+  // "Item listed" promo with "List another" / "Later": it covers the page and adds nothing for us.
+  async afterPublished() {
+    const later = await waitFor(
+      () =>
+        document.querySelector<HTMLElement>('[data-testid="list-promotion-cancel-cta"]') ??
+        [...document.querySelectorAll(DIALOG)]
+          .filter((d) => /item listed/.test(normalize(d.textContent)))
+          .map((d) => findButton(/^(later|not now|close)$/, d))
+          .find(Boolean) ??
+        null,
+      15_000,
+    );
+    if (later) click(later);
+  },
+
+  // Vinted goes back to the seller's profile after publishing, so the id comes from the upload request
+  // (seen by vinted-page.ts in the page's world).
+  watchPublished(onPublished) {
+    window.addEventListener("message", (e) => {
+      if (e.source !== window || e.origin !== location.origin || !isUploadedMessage(e.data)) return;
+      onPublished({ externalId: e.data.id, url: `${location.origin}/items/${e.data.id}` });
+    });
+  },
+
   // Own item page → "Delete" → confirmation dialog. The seller presses the final confirm.
   delist: {
     async step(ctx) {
@@ -234,7 +319,16 @@ export const vinted: Adapter = {
     }
 
     // Category comes before brand/size/condition on Vinted and unlocks them.
-    report.manual.push({ field: "Category", value: item.category });
+    const category = vintedCategory(item);
+    if (category && (await pickCategory(category))) report.filled.push(`Category (${category.name})`);
+    else report.manual.push({ field: "Category", value: category ? `${category.parent} > ${category.name}` : item.category });
+
+    const isbnValue = item.book?.isbn ?? "";
+    const isbn = isbnValue ? findField(FIELDS.isbn) : null;
+    if (isbn) {
+      setValue(isbn, isbnValue);
+      report.filled.push("ISBN");
+    }
 
     const brand = item.brand ? findField(FIELDS.brand) : null;
     if (brand && (await pickOption(brand, item.brand))) report.filled.push("Brand");
@@ -262,15 +356,14 @@ export const vinted: Adapter = {
       report.manual.push({ field: "Price", value: toDecimal(item.price) });
     }
 
-    const packageSize = vintedPackageSize(item);
-    if (packageSize && (await waitFor(() => (selectPackageSize(packageSize) ? true : null), 1500))) {
-      report.filled.push("Parcel size");
-    } else if (packageSize) {
-      // The sizes only appear once a category is picked, which the seller does by hand: keep watching.
+    // Most of what we sell is books, which fit Small; Vinted's own "Recommended" is often Medium.
+    const packageSize = vintedPackageSize(item) ?? "small";
+    if (await waitFor(() => (selectPackageSize(packageSize) ? true : null), 1500)) {
+      report.filled.push(`Parcel size (${VINTED_PACKAGE_LABELS[packageSize]})`);
+    } else {
+      // The sizes only appear once a category is picked; if the seller does that by hand, keep watching.
       void waitFor(() => (selectPackageSize(packageSize) ? true : null), 10 * 60_000, 1000);
       report.manual.push({ field: "Parcel size", value: `${VINTED_PACKAGE_LABELS[packageSize]} (picked for you once the sizes appear)` });
-    } else {
-      report.manual.push({ field: "Parcel size", value: "" });
     }
     return report;
   },
