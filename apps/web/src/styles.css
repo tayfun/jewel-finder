@@ -1073,3 +1073,20 @@ label.ai-filled input, label.ai-filled select, label.ai-filled textarea { border
 @media (prefers-reduced-motion: reduce) { .ai-waiting input, .ai-waiting textarea, .ai-waiting select { animation: none; } }
 .section-title-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
 .book-toggle { margin: -0.4rem 0 1rem 0.2rem; }
+
+/* "Import instead" callout at the top of the add-item wizard: loud on purpose. */
+.import-callout {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 1rem 1.2rem; margin-bottom: 1.1rem;
+  padding: 1.2rem 1.4rem; border-radius: var(--radius-lg); border: 2px solid transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(90deg, var(--brand-coral), var(--brand-amber), var(--brand-violet), var(--accent)) border-box;
+  box-shadow: var(--shadow);
+}
+.import-callout h2 { font-size: 1.15rem; margin: 0 0 0.3rem; }
+.import-callout p { margin: 0; color: var(--muted); }
+.import-icon { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 14px; font-size: 1.5rem; font-weight: 800; color: var(--on-accent); background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 50%, var(--brand-violet))); }
+@media (max-width: 700px) {
+  .import-callout { grid-template-columns: auto minmax(0, 1fr); }
+  .import-callout .button { grid-column: 1 / -1; }
+}

@@ -215,6 +215,26 @@ signed, rare…) flagged and matched like for like. Full plan: [PRICING.md](PRIC
   a price threshold or below the user's own sold prices for similar items.
 - "Save to inventory" from a marketplace item page (prefilled draft with cost = purchase price).
 
+**Adding items, next improvements.** The add flow is photos first (a guided shot list), then Gemini
+fills the form (`POST /api/autofill`, item type decides whether book fields show). Next:
+- **Camera capture in the wizard**: on phones, take photos straight from the wizard, with the shot list
+  as a checklist that ticks off as shots come in (front, back, labels, edition page, barcode, flaws).
+  Most adding happens on a phone.
+- **Barcode / ISBN scan**: scan before or alongside the photos (`BarcodeDetector` where available, a JS
+  fallback otherwise) and look the ISBN up in a book database (e.g. Open Library) to pin the exact
+  edition, rather than relying on Gemini reading it off a photo. Pass the result to auto-fill.
+- **Price straight after auto-fill**: run the existing price check (PRICING.md) as soon as the details
+  are in and offer the suggested price in the Price field, with the comps one click away.
+- **Duplicate check while adding**: before saving, run the duplicate matching (`findDuplicatePairs`) on the
+  draft and warn "You may already have this", linking the existing item.
+- **Autosave a draft**: save the item as a draft once auto-fill returns (status `draft` already exists), so
+  closing the tab doesn't lose the photos and the AI result; "Save item" then sets it in stock.
+- **Many items at once**: drop photos of several items (a haul) and have Gemini group them into one draft
+  per item, to review and save in turn.
+- **Clothing details**: for clothes, ask for measurements (pit to pit, length, waist, inside leg) and the
+  material label, which Vinted buyers ask for all the time; add the fields and have auto-fill read them
+  from photos of a tape measure or the care label.
+
 ## 8. Later / out of scope for v1
 
 - Bulk actions, CSV import/export, multi-quantity stock with per-sale tracking, profit reports.

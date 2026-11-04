@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { PhotoUploader } from "./PhotoUploader";
 
 // Step 1 of adding an item: photos first, with a shot list, then auto-fill from them.
@@ -38,6 +39,22 @@ export function PhotoWizard({
   const ready = images.length > 0 && uploading === 0;
   return (
     <div className="wizard">
+      <aside className="import-callout" aria-label="Import instead">
+        <span className="import-icon" aria-hidden="true">
+          ⬇
+        </span>
+        <div>
+          <h2>Already selling on eBay or Vinted? Don't add them one by one.</h2>
+          <p>
+            Import your existing listings in one go: photos, titles, descriptions, prices and condition come across
+            automatically, and they stay linked to their listings.
+          </p>
+        </div>
+        <Link to="/import" className="button primary big">
+          Import my listings
+        </Link>
+      </aside>
+
       <section className="card wizard-intro">
         <div>
           <h2>Start with photos, we’ll fill in the rest</h2>
