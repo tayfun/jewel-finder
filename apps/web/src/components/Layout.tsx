@@ -22,7 +22,7 @@ export function Layout({ children }: { children?: ReactNode }) {
     <div className="app">
       <header className="topbar">
         <NavLink to="/" className="brand">
-          <Logo size={30} />
+          <Logo size={34} />
         </NavLink>
         <nav>
           <NavLink to="/" end>

@@ -2,7 +2,7 @@ import type { Credentials } from "@jf/shared";
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../auth";
-import { Logo } from "../components/Brand";
+import { FanIcon, Logo } from "../components/Brand";
 
 /** Shared submit/redirect logic for the sign-in and sign-up forms. */
 function useAuthForm(action: (creds: Credentials) => Promise<void>) {
@@ -31,11 +31,29 @@ function useAuthForm(action: (creds: Credentials) => Promise<void>) {
   return { email, setEmail, password, setPassword, error, busy, submit, from };
 }
 
-function Brand() {
+function Brand({ size = 44 }: { size?: number }) {
   return (
-    <Link to="/" className="brand">
-      <Logo size={34} />
+    <Link to="/" className="brand brand-auth" aria-label="Stock & List home">
+      <Logo size={size} />
     </Link>
+  );
+}
+
+/** "Your stock" fanning out to Vinted and eBay, like the logo's cards. */
+function FanIllustration() {
+  return (
+    <div className="fan-art" aria-hidden="true">
+      {["violet", "amber", "coral"].map((c) => (
+        <div key={c} className={`fan-card ${c}`}>
+          <span className="fan-photo" />
+          <span className="fan-line" />
+          <span className="fan-line short" />
+          {c === "coral" && <span className="fan-label">Your stock</span>}
+        </div>
+      ))}
+      <span className="fan-tag amber">Vinted</span>
+      <span className="fan-tag violet">eBay</span>
+    </div>
   );
 }
 
@@ -72,7 +90,7 @@ export function Login() {
           />
         </label>
         {f.error && <p className="error">{f.error}</p>}
-        <button className="primary" disabled={f.busy}>
+        <button className="primary cta" disabled={f.busy}>
           {f.busy ? "Signing in…" : "Sign in"}
         </button>
         <p className="muted small center">
@@ -91,8 +109,9 @@ export function Signup() {
   return (
     <div className="signup-page">
       <aside className="signup-pitch">
-        <Brand />
+        <Brand size={48} />
         <div>
+          <FanIllustration />
           <h1>Up and running in seconds.</h1>
           <p>All we need is your email. No business details, no shop names, no forms to wade through.</p>
           <ul className="checklist">
@@ -106,6 +125,7 @@ export function Signup() {
 
       <main className="signup-main">
         <form className="signup-form" onSubmit={f.submit}>
+          <span className="eyebrow">Free to start</span>
           <h2>Create your account</h2>
           <label>
             Your email
@@ -132,7 +152,8 @@ export function Signup() {
             />
           </label>
           {f.error && <p className="error">{f.error}</p>}
-          <button className="primary big" disabled={f.busy}>
+          <button className="primary big cta" disabled={f.busy}>
+            {!f.busy && <FanIcon />}
             {f.busy ? "Creating your account…" : "Get started"}
           </button>
           <p className="muted small center">

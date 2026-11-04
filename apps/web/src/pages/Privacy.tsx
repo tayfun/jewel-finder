@@ -1,6 +1,5 @@
 import { Link } from "react-router";
-import { ThemeToggle } from "../components/ThemeToggle";
-import { Logo } from "../components/Brand";
+import { SiteHeader } from "../components/SiteHeader";
 
 const UPDATED = "3 November 2026";
 /** Set VITE_CONTACT_EMAIL in apps/web/.env; shown for privacy requests. */
@@ -14,14 +13,7 @@ function Contact() {
 export function Privacy() {
   return (
     <div className="landing">
-      <header className="landing-nav">
-        <Link to="/" className="brand">
-          <Logo size={32} />
-        </Link>
-        <div className="actions">
-          <ThemeToggle />
-        </div>
-      </header>
+      <SiteHeader />
 
       <article className="legal">
         <h1>Privacy policy</h1>
