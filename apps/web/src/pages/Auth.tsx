@@ -109,7 +109,7 @@ export function Signup() {
   return (
     <div className="signup-page">
       <aside className="signup-pitch">
-        <Brand size={48} />
+        <Brand size={88} />
         <div>
           <FanIllustration />
           <h1>Up and running in seconds.</h1>
