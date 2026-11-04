@@ -45,7 +45,7 @@ const CSS = `
   .footer { display: flex; justify-content: space-between; align-items: center; padding: 9px 14px; border-top: 1px solid #e0e4df; background: #f7f8f6;
     border-radius: 0 0 14px 14px; }
   .footer .brand { font-weight: 800; letter-spacing: -0.02em; color: #2d3533; }
-  .footer .brand .amp { display: inline-block; margin: 0 2px; color: #e4523c; font-style: italic; transform: rotate(-6deg); }
+  .footer .brand .amp { display: inline-block; margin: 0 5px 0 2px; color: #e4523c; text-shadow: 0.08em 0 0 #ffc53d, 0.16em 0 0 #b9a2ff; }
   .footer button { all: unset; cursor: pointer; color: #4f5a58; font-size: 12.5px; font-weight: 500; }
   .footer button:hover { color: #b42318; }
   .error header { background: linear-gradient(135deg, #c0331f, #92210f); }

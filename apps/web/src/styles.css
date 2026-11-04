@@ -163,7 +163,8 @@ label small { font-weight: 400; }
 .brand { display: flex; align-items: center; gap: 0.6rem; white-space: nowrap; font-weight: 800; font-size: 1.12rem; letter-spacing: -0.03em; color: var(--text); }
 .logo-mark { flex: none; border-radius: 26%; box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent); transition: transform 0.2s; }
 .brand:hover .logo-mark { transform: rotate(-6deg) scale(1.06); }
-.wordmark .amp { display: inline-block; margin: 0 0.14em; color: var(--brand-coral); font-style: italic; transform: rotate(-6deg) translateY(-0.02em); }
+/* The ampersand fans out in three colours, like the cards in the logo. */
+.wordmark .amp { display: inline-block; margin: 0 0.3em 0 0.14em; color: var(--brand-coral); text-shadow: 0.08em 0 0 var(--brand-amber), 0.16em 0 0 var(--brand-violet); }
 .brand:hover { text-decoration: none; }
 .container { max-width: 1320px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1.75rem; flex-wrap: wrap; }

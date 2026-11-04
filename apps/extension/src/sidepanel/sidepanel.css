@@ -17,7 +17,7 @@ body { margin: 0; }
 header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 12px 14px; background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
 .brand { font-weight: 800; letter-spacing: -0.03em; display: flex; gap: 8px; align-items: center; }
 .brand img { flex: none; border-radius: 26%; box-shadow: 0 2px 6px rgb(11 122 108 / 30%); margin-right: 1px; }
-.brand .amp { display: inline-block; margin: 0 -4px; color: var(--coral); font-style: italic; transform: rotate(-6deg); }
+.brand .amp { display: inline-block; margin: 0 2px 0 -3px; color: var(--coral); text-shadow: 0.08em 0 0 #ffc53d, 0.16em 0 0 #b9a2ff; }
 header .brand { font-size: 16px; flex: 1; }
 .login h1.brand { font-size: 22px; margin-bottom: 8px; }
 a { color: var(--accent); text-decoration: none; }
