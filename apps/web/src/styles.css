@@ -830,9 +830,9 @@ label.checkbox-row { flex-direction: row; align-items: center; gap: 0.45rem; mar
 
 /* A soft glow that follows the mouse, so it's easy to spot. Fine pointers only (not touch). */
 .cursor-glow {
-  position: fixed; left: 0; top: 0; z-index: 9999; pointer-events: none; width: 300px; height: 300px; margin: -150px 0 0 -150px;
+  position: fixed; left: 0; top: 0; z-index: 9999; pointer-events: none; width: 220px; height: 220px; margin: -110px 0 0 -110px;
   border-radius: 50%; opacity: 0; transition: opacity 0.3s;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 30%, transparent) 0%, color-mix(in srgb, var(--brand-violet) 12%, transparent) 35%, transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 14%, transparent) 0%, color-mix(in srgb, var(--brand-violet) 5%, transparent) 40%, transparent 70%);
   mix-blend-mode: var(--glow-blend, normal);
 }
 .cursor-glow.on { opacity: 1; }
