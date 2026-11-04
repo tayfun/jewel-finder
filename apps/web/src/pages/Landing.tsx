@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { ThemeToggle } from "../components/ThemeToggle";
-import { Logo } from "../components/Brand";
+import { Wordmark } from "../components/Brand";
 
 const FEATURES = [
   {
@@ -68,9 +68,12 @@ export function Landing() {
       <div className={`landing-nav-wrap ${scrolled ? "scrolled" : ""}`}>
         <header className="landing-nav">
           <Link to="/" className="brand brand-lg" aria-label="Stock & List home">
-            <Logo size={46} />
+            <img src="/favicon.svg" alt="" width={46} height={46} className="logo-mark" />
+            <span className="brand-text">
+              <Wordmark />
+              <span className="brand-tagline">One stock. Every marketplace.</span>
+            </span>
           </Link>
-          <span className="brand-tagline">One stock. Every marketplace.</span>
           <nav className="hide-sm" aria-label="Sections">
             <a href="#features">Features</a>
             <a href="#how">How it works</a>
