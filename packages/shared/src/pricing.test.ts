@@ -3,9 +3,11 @@ import {
   aiReviewBasis,
   assessComp,
   compFeatures,
+  compSearchUrl,
   compsForReview,
   currentJudgements,
   nicePrice,
+  priceBand,
   priceQueries,
   priceSummary,
   quantile,
@@ -14,12 +16,12 @@ import {
   type AiReview,
   type Comp,
 } from "./pricing";
-import { BookDetails, type Item } from "./schemas";
+import { BookDetails, type Item, type Settings } from "./schemas";
 
 const DAY = 86_400_000;
 const NOW = Date.UTC(2026, 10, 3);
 
-type Priced = Pick<Item, "title" | "description" | "tags" | "book" | "condition" | "brand" | "size">;
+type Priced = Pick<Item, "title" | "description" | "tags" | "book" | "condition" | "brand" | "size"> & { price?: number | null };
 const item = (fields: Partial<Priced>): Priced => ({ title: "", description: "", tags: [], book: null, condition: null, brand: "", size: "", ...fields });
 const book = (fields: Partial<BookDetails>) => BookDetails.parse(fields);
 const sold = (title: string, pounds: number, daysAgo = 10, extra: Partial<Comp> = {}): Comp => ({
@@ -94,6 +96,26 @@ describe("assessing comps", () => {
     expect(verdict(sold("Nike Air Max 90 trainers", 50))).toBe("Different item");
     expect(verdict(sold("Levi's 501 jeans for parts / spares or repairs", 3))).toBe("For parts / faulty");
     expect(verdict(sold("Levi's 501 jeans", 0))).toBe("No price");
+  });
+
+  it("with a price set, only compares half to ten times it", () => {
+    const box = item({ title: "Nintendo Game Boy Color empty box", price: 1500 });
+    expect(priceBand(box)).toEqual({ min: 750, max: 15000 });
+    expect(priceBand(item({ title: "x" }))).toBeNull();
+    expect(priceBand(item({ title: "x", price: 0 }))).toBeNull();
+    const verdict = (c: Comp) => assessComp(box, c).reason || assessComp(box, c).verdict;
+    expect(verdict(sold("Nintendo Game Boy Color boxed console", 160))).toBe("Over 10× your price");
+    expect(verdict(sold("Nintendo Game Boy Color box", 5))).toBe("Under half your price");
+    expect(verdict(sold("Nintendo Game Boy Color box", 7.5))).toBe("match");
+    expect(verdict(sold("Nintendo Game Boy Color box", 150))).toBe("match");
+  });
+
+  it("searches within the price band", () => {
+    const settings = { ebayDomain: "www.ebay.co.uk", vintedDomain: "www.vinted.co.uk" } as Settings;
+    const band = { min: 750, max: 15000 };
+    expect(compSearchUrl("ebay_sold", "game boy", settings, band)).toContain("&_udlo=7.5&_udhi=150&");
+    expect(compSearchUrl("vinted_listed", "game boy", settings, band)).toContain("&price_from=7.5&price_to=150&");
+    expect(compSearchUrl("ebay_listed", "game boy", settings)).not.toContain("_udlo");
   });
 
   it("separates ordinary copies from collectable ones", () => {

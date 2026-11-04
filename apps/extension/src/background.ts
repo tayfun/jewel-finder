@@ -6,6 +6,7 @@ import {
   MARKETPLACE_LABELS,
   assessComp,
   compSearchUrl,
+  priceBand,
   priceQueries,
   type Comp,
   type CompSource,
@@ -122,7 +123,7 @@ const COMPS_TIMEOUT_MS = 30_000;
 const ENOUGH = 8;
 
 /** Opens one search in a background tab, waits for its content script to read it, closes it. */
-async function searchComps(source: CompSource, query: string, settings: Settings, itemId: string) {
+async function searchComps(source: CompSource, query: string, settings: Settings, itemId: string, band: ReturnType<typeof priceBand>) {
   // Record the job before the page loads, so its content script finds it.
   const tab = await chrome.tabs.create({ url: "about:blank", active: false });
   const tabId = tab.id;
@@ -133,7 +134,7 @@ async function searchComps(source: CompSource, query: string, settings: Settings
       setTimeout(() => resolve({ comps: [], problem: "The search page didn't load in time." }), COMPS_TIMEOUT_MS);
     });
     await setJob(tabId, { kind: "comps", source, itemId, marketplace: COMP_SOURCE_MARKETPLACE[source], startedAt: Date.now() });
-    await chrome.tabs.update(tabId, { url: compSearchUrl(source, query, settings) });
+    await chrome.tabs.update(tabId, { url: compSearchUrl(source, query, settings, band) });
     return await result;
   } finally {
     compWaiters.delete(tabId);
@@ -253,6 +254,8 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
     const queries = priceQueries(item);
     if (!queries.length) throw new Error("Give the item a title first");
     const isbn = item.book?.isbn || null;
+    // With a price set, search half to ten times it: an empty box shouldn't be priced from boxed items.
+    const band = priceBand(item);
     const comps: Comp[] = [];
     const problems: string[] = [];
     const used = new Set<string>();
@@ -265,7 +268,7 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
         // An ISBN search on Vinted finds nothing: its sellers rarely type ISBNs.
         if (source === "vinted_listed" && query === isbn) continue;
         used.add(query);
-        const result = await searchComps(source, query, auth.account.settings, itemId);
+        const result = await searchComps(source, query, auth.account.settings, itemId, band);
         const fresh = result.comps.filter((c) => !comps.some((x) => x.url === c.url)).map((c) => ({ ...c, exact: query === isbn }));
         comps.push(...fresh);
         usable += fresh.filter((c) => assessComp(item, c).verdict !== "dropped").length;

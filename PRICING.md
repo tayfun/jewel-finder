@@ -83,7 +83,9 @@ the evidence ("Edition: First edition; printing line ends in 1").
 
 1. **Relevance:** title similarity to the item (`titleSimilarity`), plus feature agreement (§4). Keep
    comps scoring ≥ 0.5; drop lots ("job lot", "bundle", "x10"), "for parts/spares", "reprint/facsimile"
-   when ours isn't, and prices that are clearly placeholders.
+   when ours isn't, and prices that are clearly placeholders. When the seller has set a price, drop comps
+   under half or over ten times it (`priceBand`), and search only that range (eBay `_udlo`/`_udhi`, Vinted
+   `price_from`/`price_to`): an empty box otherwise gets priced from boxed items.
 2. **Pools:** `sold` (eBay sold) and `listed` (eBay + Vinted listed), each split into *matching* and
    *ordinary* (missing a major feature).
 3. **Outliers:** within each pool, drop prices outside 1.5 × IQR (only with ≥ 5 comps).

@@ -170,7 +170,17 @@ export function compFeatures(title: string): Set<FeatureKey> {
   return out;
 }
 
-type PricedItem = Pick<Item, "title" | "description" | "tags" | "book" | "condition" | "brand" | "size">;
+type PricedItem = Pick<Item, "title" | "description" | "tags" | "book" | "condition" | "brand" | "size"> & { price?: number | null };
+
+/**
+ * The prices worth comparing against, when the seller has set one: half to ten times it. Searches
+ * otherwise mix in things that only look the same (an empty box turns up the boxed item, a jacket
+ * the whole book), and their prices are wildly off.
+ */
+export function priceBand(item: Pick<PricedItem, "price">): { min: number; max: number } | null {
+  const p = item.price;
+  return p != null && p > 0 ? { min: Math.floor(p / 2), max: p * 10 } : null;
+}
 
 /** The item's special features, with the evidence for each. */
 export function specialFeatures(item: PricedItem): Feature[] {
@@ -305,6 +315,9 @@ function assessByRules(item: PricedItem, comp: Comp, itemFeatures: Feature[], sa
   if (PARTS.test(title) && !PARTS.test(itemTitle)) return drop("For parts / faulty");
   if (NOT_THE_THING.test(title)) return drop("Not the item itself");
   if (item.size && comp.size && !sizesAgree(item.size, comp.size)) return drop(`Different size (${comp.size})`);
+  const band = priceBand(item);
+  if (band && comp.price < band.min) return drop("Under half your price");
+  if (band && comp.price > band.max) return drop("Over 10× your price");
 
   const mine = new Set(itemFeatures.map((f) => f.key));
   const theirs = compFeatures(comp.title);
@@ -502,12 +515,20 @@ export function compsForReview(item: PricedItem, comps: Comp[], limit = 60): Com
 /** Which marketplace a comp source searches. */
 export const COMP_SOURCE_MARKETPLACE: Record<CompSource, Marketplace> = { ebay_sold: "ebay", ebay_listed: "ebay", vinted_listed: "vinted" };
 
-/** Public search page for comps. eBay listed: Buy It Now only, since auction bids aren't prices yet. */
-export function compSearchUrl(source: CompSource, query: string, settings: Settings): string {
+/**
+ * Public search page for comps. eBay listed: Buy It Now only, since auction bids aren't prices yet.
+ * `band` (minor units, from priceBand) limits the search to that price range.
+ */
+export function compSearchUrl(source: CompSource, query: string, settings: Settings, band?: { min: number; max: number } | null): string {
   const q = encodeURIComponent(query);
-  if (source === "vinted_listed") return `https://${settings.vintedDomain}/catalog?search_text=${q}&order=relevance`;
+  const major = (minor: number) => String(Math.round(minor) / 100);
+  if (source === "vinted_listed") {
+    const range = band ? `&price_from=${major(band.min)}&price_to=${major(band.max)}` : "";
+    return `https://${settings.vintedDomain}/catalog?search_text=${q}${range}&order=relevance`;
+  }
   const sold = source === "ebay_sold" ? "&LH_Sold=1&LH_Complete=1" : "&LH_BIN=1";
-  return `https://${settings.ebayDomain}/sch/i.html?_nkw=${q}${sold}&_ipg=60&rt=nc`;
+  const range = band ? `&_udlo=${major(band.min)}&_udhi=${major(band.max)}` : "";
+  return `https://${settings.ebayDomain}/sch/i.html?_nkw=${q}${sold}${range}&_ipg=60&rt=nc`;
 }
 
 /** A price check: the comps the extension found, and the summary the server worked out from them. */
