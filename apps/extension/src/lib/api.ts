@@ -1,5 +1,6 @@
 import type { Account, ApiError } from "@jf/shared";
 import { API_URL } from "../config";
+import { NetworkError, fetchRetry } from "./net";
 
 const KEY = "auth";
 
@@ -27,25 +28,30 @@ export class HttpError extends Error {
   }
 }
 
-/** Calls the Jewel Finder API with the stored token (or an explicit one). */
+/**
+ * Calls the Jewel Finder API with the stored token (or an explicit one). Retries on a slow or dropped
+ * connection when repeating the request is harmless: reads and updates always, a POST only with `retry`.
+ */
 export async function api<T>(
   path: string,
-  init: { method?: string; json?: unknown; body?: Blob; token?: string } = {},
+  init: { method?: string; json?: unknown; body?: Blob; token?: string; retry?: boolean } = {},
 ): Promise<T> {
   const token = init.token ?? (await getAuth())?.token;
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   if (init.json !== undefined) headers["Content-Type"] = "application/json";
   if (init.body) headers["Content-Type"] = init.body.type;
+  const method = init.method ?? (init.json !== undefined || init.body ? "POST" : "GET");
+  const repeatable = method !== "POST" || init.retry === true;
   let res: Response;
   try {
-    res = await fetch(API_URL + path, {
-      method: init.method ?? (init.json !== undefined || init.body ? "POST" : "GET"),
-      headers,
-      body: init.json !== undefined ? JSON.stringify(init.json) : init.body,
-    });
-  } catch {
-    throw new HttpError(0, `Can't reach Jewel Finder at ${API_URL}`);
+    res = await fetchRetry(
+      API_URL + path,
+      { method, headers, body: init.json !== undefined ? JSON.stringify(init.json) : init.body },
+      { what: "Jewel Finder", tries: repeatable ? 4 : 1 },
+    );
+  } catch (e) {
+    throw new HttpError(0, e instanceof NetworkError ? e.message : `Can't reach Jewel Finder at ${API_URL}`);
   }
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));

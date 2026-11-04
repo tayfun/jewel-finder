@@ -4,6 +4,7 @@ import { send, type ScrapedListing, type TabMessage } from "../messages";
 import { sleep } from "./dom";
 import type { Adapter, ImportIO } from "./runner";
 import { findListingCards, type ListingCard } from "./scrape";
+import { NetworkError, fetchRetry } from "./net";
 
 // Import mode: a panel on the seller's listings page (Vinted wardrobe, eBay Seller Hub…) to pick
 // listings one by one or all at once. Each pick is read from its own listing page and sent to the
@@ -17,9 +18,9 @@ const backgroundIO: ImportIO = {
 export async function readListing(adapter: Adapter, card: ListingCard, io: ImportIO = backgroundIO): Promise<ScrapedListing> {
   let res: Response;
   try {
-    res = await fetch(card.url, { credentials: "include" });
-  } catch {
-    throw new Error("Couldn't open the listing");
+    res = await fetchRetry(card.url, { credentials: "include" }, { what: "the listing" });
+  } catch (e) {
+    throw new Error(e instanceof NetworkError ? e.message : "Couldn't open the listing");
   }
   if (res.status === 404 || res.status === 410) throw new Error("This listing no longer exists");
   if (!res.ok) throw new Error(`Couldn't open the listing (${res.status})`);

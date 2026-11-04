@@ -22,6 +22,7 @@ import {
 } from "@jf/shared";
 import { API_URL } from "./config";
 import { api, getAuth, setAuth, tokenSubject } from "./lib/api";
+import { NetworkError, fetchBlob, mapLimit } from "./lib/net";
 import { isDescriptionHost, isPhotoHost, toImportListing } from "./lib/import-item";
 import type { ImageFile, ImportJob, Job, Reply, Request, Responses, TabMessage } from "./messages";
 
@@ -101,15 +102,14 @@ const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 /** Downloads a listing photo from the marketplace's CDN and stores it in Jewel Finder. */
 async function copyPhoto(url: string): Promise<string> {
   if (!isPhotoHost(url)) throw new Error(`Not a marketplace photo: ${url}`);
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Photo download failed (${res.status})`);
-  const blob = await res.blob();
+  const blob = await fetchBlob(url, {}, { what: "the marketplace's photo server" });
   // Some CDNs send a generic type; the file extension tells us what it is.
   const ext = new URL(url).pathname.match(/\.(jpe?g|png|webp|gif)$/i)?.[1]?.toLowerCase();
   const fromExt = ext ? `image/${ext === "jpg" ? "jpeg" : ext}` : "";
   const type = PHOTO_TYPES.includes(blob.type.split(";")[0]!.trim()) ? blob.type.split(";")[0]!.trim() : fromExt;
   if (!PHOTO_TYPES.includes(type) || blob.size === 0 || blob.size > MAX_PHOTO_BYTES) throw new Error(`Unsupported photo (${type || "unknown type"})`);
-  const { key } = await api<{ key: string }>("/api/images", { body: new Blob([blob], { type }) });
+  // Repeating the upload is harmless (at worst an unused copy), so it may retry on a slow connection.
+  const { key } = await api<{ key: string }>("/api/images", { body: new Blob([blob], { type }), retry: true });
   return key;
 }
 
@@ -309,15 +309,19 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
     const job = await jobFor(sender);
     if (!job) return [];
     const item = await api<ItemWithListings>(`/api/items/${job.itemId}`);
-    const files: ImageFile[] = [];
-    for (const [i, key] of item.images.entries()) {
-      const res = await fetch(imageUrl(API_URL, key));
-      if (!res.ok) continue;
-      const blob = await res.blob();
+    // A few at a time, each retried on a slow connection; a photo that's gone (404) is skipped.
+    const files = await mapLimit(item.images, 3, async (key, i): Promise<ImageFile | null> => {
+      let blob: Blob;
+      try {
+        blob = await fetchBlob(imageUrl(API_URL, key), {}, { what: `Jewel Finder for photo ${i + 1} of ${item.images.length}` });
+      } catch (e) {
+        if (e instanceof NetworkError) throw e;
+        return null;
+      }
       const ext = key.split(".").pop() ?? "jpg";
-      files.push({ name: `photo-${i + 1}.${ext}`, type: blob.type, dataUrl: await blobToDataUrl(blob) });
-    }
-    return files;
+      return { name: `photo-${i + 1}.${ext}`, type: blob.type, dataUrl: await blobToDataUrl(blob) };
+    });
+    return files.filter((f): f is ImageFile => f !== null);
   },
 
   async JOB_PUBLISHED({ url, externalId }, sender) {
@@ -429,7 +433,9 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
         console.warn("Jewel Finder: skipped a photo", url, e);
       }
     }
+    // Safe to repeat: the import skips listings it already has.
     const { results, possibleDuplicates } = await api<ImportResult>("/api/items/import", {
+      retry: true,
       json: { marketplace, listings: [toImportListing(marketplace, listing, images)] },
     });
     const result = results[0];
@@ -447,9 +453,8 @@ const handlers: { [T in Request["type"]]: Handler<T> } = {
   async FETCH_DESCRIPTION({ url }, sender) {
     tabOf(sender);
     if (!isDescriptionHost(url)) throw new Error("Not an eBay description");
-    const res = await fetch(url, { credentials: "omit" });
-    if (!res.ok) throw new Error(`Description download failed (${res.status})`);
-    return (await res.text()).slice(0, 1_000_000);
+    const blob = await fetchBlob(url, { credentials: "omit" }, { what: "eBay's description server" });
+    return (await blob.text()).slice(0, 1_000_000);
   },
 };
 
