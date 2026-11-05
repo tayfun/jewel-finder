@@ -240,6 +240,14 @@ and photos are not sent. 4xx responses and the 503 "not configured" response are
 
 ## Deploy
 
+**Automatic:** every push to `main` runs `.github/workflows/deploy.yml`: install, typecheck, test, then
+`pnpm run deploy`. It deploys only if the checks pass, one deploy at a time; it can also be started by hand
+(Actions → Deploy → Run workflow). It needs the repository secrets `CLOUDFLARE_API_TOKEN` (the
+"Edit Cloudflare Workers" template, plus R2 and the zone of the custom domain) and `CLOUDFLARE_ACCOUNT_ID`;
+`SENTRY_AUTH_TOKEN` and `VITE_SENTRY_DSN` are optional. The Worker's own secrets stay in Cloudflare.
+
+**By hand,** and for the one-off setup:
+
 The project was called Jewel Finder; the Cloudflare names stay as they were, because renaming them would
 start an empty Worker at a new address: the Worker is still `jewel-finder` and the photos bucket
 `jewel-finder-images`. Production is served at **stockandlist.com**, a Custom Domain set in
