@@ -1096,3 +1096,19 @@ label.ai-filled input, label.ai-filled select, label.ai-filled textarea { border
   html { scroll-behavior: smooth; }
 }
 .landing [id] { scroll-margin-top: 110px; }
+
+/* Add item, step 3: price from comparables */
+.step-count { margin: 0.2rem 0 0; }
+.price-step { display: grid; gap: 0.8rem; }
+.price-step .loader { padding-block: 1rem 0.4rem; }
+.price-step .suggestions { margin: 0; }
+.price-step .ai-badge { font-size: 0.75rem; }
+.price-input { max-width: 14rem; font-weight: 650; }
+.price-input input { font-size: 1.25rem; font-weight: 700; }
+.ext-prompt { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.9rem; align-items: center; padding: 1rem; border-radius: 12px; background: var(--accent-soft); }
+.ext-prompt h3 { margin: 0 0 0.25rem; font-size: 1.05rem; }
+.ext-prompt p { margin: 0; }
+@media (max-width: 640px) {
+  .ext-prompt { grid-template-columns: auto minmax(0, 1fr); }
+  .ext-prompt .button { grid-column: 1 / -1; }
+}

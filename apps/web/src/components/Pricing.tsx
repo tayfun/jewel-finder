@@ -85,11 +85,6 @@ export function Pricing({ item, onPriced }: { item: ItemWithListings; onPriced(i
 
   const c = check.data;
   const ageDays = c ? Math.floor((Date.now() - c.createdAt) / DAY) : 0;
-  const comps = c
-    ? c.comps
-        .map((comp, i) => ({ comp, a: c.summary.assessments[i]! }))
-        .sort((x, y) => VERDICT_ORDER[x.a.verdict] - VERDICT_ORDER[y.a.verdict] || y.a.similarity - x.a.similarity)
-    : [];
 
   return (
     <section className="card pricing">
@@ -175,39 +170,7 @@ export function Pricing({ item, onPriced }: { item: ItemWithListings; onPriced(i
               {showComps ? "Hide" : "Show"} comparables
             </button>
           </p>
-          {showComps && (
-            <ul className="comps">
-              {comps.map(({ comp, a }) => (
-                <li key={comp.url} className={`comp v-${a.verdict}`}>
-                  {comp.imageUrl ? <img src={comp.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <div className="noimg" />}
-                  <div className="comp-body">
-                    <a href={comp.url} target="_blank" rel="noreferrer" title={comp.title}>
-                      {comp.title}
-                    </a>
-                    <div className="muted small">
-                      {COMP_SOURCE_LABELS[comp.source]}
-                      {comp.soldAt ? ` ${new Date(comp.soldAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : ""}
-                      {comp.condition ? ` · ${comp.condition}` : ""}
-                      {comp.size ? ` · ${comp.size}` : ""}
-                    </div>
-                  </div>
-                  <div className="comp-side">
-                    <strong>{money(comp.price)}</strong>
-                    <span className="small" title={a.reason}>
-                      {VERDICT_LABELS[a.verdict]}
-                      {a.reason ? `: ${a.reason}` : ""}
-                      {a.ai && !a.reason.startsWith("AI:") && (
-                        <span className="muted" title={`AI: ${AI_LABELS[a.ai]}`}>
-                          {" "}
-                          ✨
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          {showComps && <CompList check={c} money={money} />}
         </>
       )}
 
@@ -231,5 +194,45 @@ export function Pricing({ item, onPriced }: { item: ItemWithListings; onPriced(i
         </p>
       )}
     </section>
+  );
+}
+
+/** The comparables a check found, best matches first, with how each was judged. */
+export function CompList({ check, money }: { check: PriceCheck; money(v: number | null): string }) {
+  const comps = check.comps
+    .map((comp, i) => ({ comp, a: check.summary.assessments[i]! }))
+    .sort((x, y) => VERDICT_ORDER[x.a.verdict] - VERDICT_ORDER[y.a.verdict] || y.a.similarity - x.a.similarity);
+  return (
+    <ul className="comps">
+      {comps.map(({ comp, a }) => (
+        <li key={comp.url} className={`comp v-${a.verdict}`}>
+          {comp.imageUrl ? <img src={comp.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <div className="noimg" />}
+          <div className="comp-body">
+            <a href={comp.url} target="_blank" rel="noreferrer" title={comp.title}>
+              {comp.title}
+            </a>
+            <div className="muted small">
+              {COMP_SOURCE_LABELS[comp.source]}
+              {comp.soldAt ? ` ${new Date(comp.soldAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : ""}
+              {comp.condition ? ` · ${comp.condition}` : ""}
+              {comp.size ? ` · ${comp.size}` : ""}
+            </div>
+          </div>
+          <div className="comp-side">
+            <strong>{money(comp.price)}</strong>
+            <span className="small" title={a.reason}>
+              {VERDICT_LABELS[a.verdict]}
+              {a.reason ? `: ${a.reason}` : ""}
+              {a.ai && !a.reason.startsWith("AI:") && (
+                <span className="muted" title={`AI: ${AI_LABELS[a.ai]}`}>
+                  {" "}
+                  ✨
+                </span>
+              )}
+            </span>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

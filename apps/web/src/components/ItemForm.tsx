@@ -188,9 +188,12 @@ export function ItemForm({
   submitLabel,
   onSubmit,
   ai,
+  hidePrice,
 }: {
   initial?: Partial<Item>;
   submitLabel: string;
+  /** Leave the price out: the add-item wizard asks for it in its own step, after checking comparables. */
+  hidePrice?: boolean;
   onSubmit(input: ItemInput): Promise<void>;
   /** Auto-fill from photos for a new item: the form fills in once the suggestion arrives. */
   ai?: AutofillState;
@@ -245,7 +248,8 @@ export function ItemForm({
     const parsed = fromForm(form);
     if (typeof parsed === "string") return setError(parsed);
     // Hidden book fields don't count: it isn't a book.
-    const input = showBook ? parsed : { ...parsed, book: null };
+    const input: ItemInput = showBook ? parsed : { ...parsed, book: null };
+    if (hidePrice) delete input.price;
     setError(null);
     setSaving(true);
     try {
@@ -449,12 +453,14 @@ export function ItemForm({
       )}
 
       <section className="card">
-        <h2>Stock &amp; pricing</h2>
+        <h2>{hidePrice ? "Stock" : "Stock & pricing"}</h2>
         <div className="grid-3">
-          <label>
-            Price
-            <input inputMode="decimal" placeholder="0.00" {...field("price")} />
-          </label>
+          {!hidePrice && (
+            <label>
+              Price
+              <input inputMode="decimal" placeholder="0.00" {...field("price")} />
+            </label>
+          )}
           <label>
             Cost (what you paid)
             <input inputMode="decimal" placeholder="0.00" {...field("cost")} />
