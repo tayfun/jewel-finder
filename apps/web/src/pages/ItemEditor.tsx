@@ -59,7 +59,10 @@ export function NewItem() {
   }
 
   // Each step starts at its top, not wherever the last one was scrolled to.
-  useEffect(() => window.scrollTo({ top: 0 }), [step]);
+  // (Braces matter: newer browsers' scrollTo returns a Promise, which React would take for a clean-up function.)
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [step]);
 
   const at = STEPS.findIndex((s) => s.key === step);
   // Once saved, the photos live on the item (edit them in details), so details has no way back.
