@@ -23,7 +23,7 @@ import { Pricing } from "../components/Pricing";
 import { StatusBadge } from "../components/Badges";
 import { Lightbox } from "../components/Lightbox";
 import { delistViaExtension, listViaExtension, relistViaExtension, useExtension, useItemChanges } from "../extension";
-import { useLoad } from "../hooks";
+import { useLoad, useSwipe } from "../hooks";
 import { Loader } from "../components/Loader";
 import { Photo } from "../components/Photo";
 
@@ -45,6 +45,8 @@ export function ItemDetail() {
     [id],
   );
   const imageCount = item?.images.length ?? 0;
+  // Swipe between photos on touch screens, like the arrows.
+  const swipe = useSwipe((by) => imageCount > 1 && setPhoto((p) => (p + by + imageCount) % imageCount));
 
   // ←/→ step through photos on the page too (the lightbox handles its own keys while open).
   useEffect(() => {
@@ -198,10 +200,12 @@ export function ItemDetail() {
         <div className="gallery card">
           {item.images.length ? (
             <>
-              <div className="main-photo-wrap">
+              <div className="main-photo-wrap" {...swipe.handlers}>
                 <button
                   className="main-photo-button"
-                  onClick={() => setViewer(true)}
+                  onClick={() => {
+                    if (!swipe.justSwiped()) setViewer(true);
+                  }}
                   aria-label="View photo full screen"
                   title="Click to view full screen"
                 >

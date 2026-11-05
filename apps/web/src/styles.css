@@ -417,7 +417,7 @@ label.checkbox input { width: 1rem; }
    ========================================================================== */
 .detail { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
 .gallery { padding: 0.75rem; }
-.main-photo-wrap { position: relative; border-radius: 10px; overflow: hidden; background: var(--surface-2); }
+.main-photo-wrap { position: relative; border-radius: 10px; overflow: hidden; background: var(--surface-2); touch-action: pan-y pinch-zoom; }
 .main-photo-button { display: block; width: 100%; padding: 0; border: none; border-radius: 0; background: none; box-shadow: none; cursor: zoom-in; min-height: 0; }
 .main-photo-button:hover:not(:disabled) { background: none; }
 .main-photo-button:active:not(:disabled) { transform: none; }
@@ -465,7 +465,7 @@ label.checkbox input { width: 1rem; }
 .lightbox button { background: rgb(255 255 255 / 10%); border: 1px solid rgb(255 255 255 / 14%); color: #fff; box-shadow: none; }
 .lightbox button:hover:not(:disabled) { background: rgb(255 255 255 / 20%); }
 .lightbox-close { width: 2.5rem; height: 2.5rem; padding: 0; border-radius: 50%; font-size: 1rem; }
-.lightbox-stage { position: relative; min-height: 0; overflow: hidden; }
+.lightbox-stage { position: relative; min-height: 0; overflow: hidden; touch-action: pan-y pinch-zoom; }
 /* Absolutely centred so max-width/height resolve against the stage, keeping the photo fully on screen. */
 .lightbox-stage img { position: absolute; inset: 0; margin: auto; max-width: calc(100% - 9rem); max-height: calc(100% - 0.5rem); object-fit: contain; border-radius: 6px; box-shadow: 0 20px 60px rgb(0 0 0 / 50%); animation: lightbox-in 0.18s ease-out; }
 @keyframes lightbox-in { from { opacity: 0; transform: scale(0.985); } }
@@ -530,18 +530,19 @@ label.checkbox input { width: 1rem; }
   .autofill-table td.muted { display: none; }
   .autofill-table td.prewrap:last-child { grid-column: 2; }
 }
-/* Phones and small tablets: logo and the theme button on top, the links on a second row that scrolls
-   sideways, so nothing runs off the screen. */
+.menu-button { display: none; }
+/* Phones and small tablets: the links fold into a menu under a ☰ button, so nothing scrolls sideways. */
 @media (max-width: 760px) {
-  .topbar { flex-wrap: wrap; row-gap: 0.35rem; }
   .topbar-end { margin-left: auto; }
+  .menu-button { display: inline-grid; place-items: center; font-size: 1.15rem; }
   .topbar nav {
-    order: 3; flex: 1 0 100%; gap: 0.15rem; overflow-x: auto; overscroll-behavior-x: contain;
-    margin: 0 -1rem; padding: 0 1rem 0.15rem; scrollbar-width: none; scroll-snap-type: x proximity;
+    display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; gap: 0.15rem;
+    padding: 0.5rem 1rem 0.9rem; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow-lg);
   }
-  .topbar nav::-webkit-scrollbar { display: none; }
-  .topbar nav a { scroll-snap-align: start; font-size: 0.9rem; padding: 0.4rem 0.7rem; }
+  .topbar.menu-open nav { display: flex; animation: menu-in 0.14s ease-out; }
+  .topbar nav a { font-size: 1rem; padding: 0.7rem 0.85rem; }
 }
+@keyframes menu-in { from { opacity: 0; transform: translateY(-6px); } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

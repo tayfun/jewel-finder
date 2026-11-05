@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
+import { useSwipe } from "../hooks";
 import { Photo } from "./Photo";
 
-/** Full-screen photo viewer. ←/→ move between photos, Esc or a click on the backdrop closes it. */
+/** Full-screen photo viewer. ←/→ or a swipe move between photos; Esc or a click on the backdrop closes it. */
 export function Lightbox({
   images,
   index,
@@ -16,6 +17,7 @@ export function Lightbox({
   const dialog = useRef<HTMLDialogElement>(null);
   const count = images.length;
   const go = (by: number) => onIndex((index + by + count) % count);
+  const swipe = useSwipe((by) => count > 1 && go(by));
 
   useEffect(() => {
     const d = dialog.current!;
@@ -48,7 +50,9 @@ export function Lightbox({
         onClose();
       }}
       onClick={(e) => {
-        // Clicks on the backdrop (the dialog itself or the stage around the photo) close it.
+        // Clicks on the backdrop (the dialog itself or the stage around the photo) close it; not the tap
+        // a swipe can leave behind.
+        if (swipe.justSwiped()) return;
         if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains("lightbox-stage")) onClose();
       }}
     >
@@ -61,7 +65,7 @@ export function Lightbox({
         </button>
       </div>
 
-      <div className="lightbox-stage">
+      <div className="lightbox-stage" {...swipe.handlers}>
         {count > 1 && (
           <button className="lightbox-nav prev" onClick={() => go(-1)} aria-label="Previous photo">
             ‹

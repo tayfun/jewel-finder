@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, Navigate, Outlet, useLocation } from "react-router";
 import { useAuth } from "../auth";
 import { useExtensionReloaded } from "../extension";
@@ -18,13 +18,32 @@ export function RequireAuth() {
 export function Layout({ children }: { children?: ReactNode }) {
   const { account } = useAuth();
   const extensionReloaded = useExtensionReloaded();
+  const { pathname } = useLocation();
+  // Phones: the links live behind a menu button instead of a sideways-scrolling row.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const header = useRef<HTMLElement>(null);
+  useEffect(() => setMenuOpen(false), [pathname]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    const onClick = (e: MouseEvent) => {
+      if (!header.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("click", onClick);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("click", onClick);
+    };
+  }, [menuOpen]);
+
   return (
     <div className="app">
-      <header className="topbar">
+      <header className={`topbar${menuOpen ? " menu-open" : ""}`} ref={header}>
         <NavLink to="/" className="brand">
           <Logo size={34} />
         </NavLink>
-        <nav>
+        <nav id="app-nav" onClick={(e) => (e.target as HTMLElement).closest("a") && setMenuOpen(false)}>
           <NavLink to="/" end>
             Inventory
           </NavLink>
@@ -37,6 +56,15 @@ export function Layout({ children }: { children?: ReactNode }) {
         <div className="topbar-end">
           <span className="muted small hide-sm">{account?.email}</span>
           <ThemeToggle />
+          <button
+            className="icon-button menu-button"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            aria-controls="app-nav"
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            {menuOpen ? "✕" : "☰"}
+          </button>
         </div>
       </header>
       <main className="container">
