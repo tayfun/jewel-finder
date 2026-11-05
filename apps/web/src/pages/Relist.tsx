@@ -14,6 +14,7 @@ import { api, fetchItems } from "../api";
 import { useAccount } from "../auth";
 import { relistViaExtension, useExtension, useItemChanges } from "../extension";
 import { useLoad } from "../hooks";
+import { Photo } from "../components/Photo";
 
 /** Each relist opens a tab with a form to check and publish, so don't open dozens at once. */
 const MAX_AT_ONCE = 10;
@@ -175,7 +176,7 @@ export function Relist() {
                         onChange={(e) => toggle(r.key, e.target.checked)}
                       />
                     </td>
-                    <td>{r.item.images[0] ? <img src={`/images/${r.item.images[0]}`} alt="" loading="lazy" /> : <div className="noimg" />}</td>
+                    <td>{r.item.images[0] ? <Photo k={r.item.images[0]} size="thumb" loading="lazy" /> : <div className="noimg" />}</td>
                     <td>
                       <Link to={`/items/${r.item.id}`} className="item-title" title={r.item.title}>
                         {r.item.title}

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PHOTO_MAX_EDGE, PHOTO_QUALITY, fitWithin, optimizePhoto } from "./images";
+import { PHOTO_MAX_EDGE, PHOTO_QUALITY, fitWithin, optimizePhoto, photoUrl } from "./images";
 
 describe("fitWithin", () => {
   it("scales the longest edge down to the limit, keeping the aspect ratio", () => {
@@ -66,5 +66,19 @@ describe("optimizePhoto", () => {
     });
     const heic = file(2_000_000, "image/heic");
     expect(await optimizePhoto(heic)).toBe(heic);
+  });
+});
+
+describe("photoUrl", () => {
+  it("asks Cloudflare for a resized AVIF/WebP copy in production", () => {
+    expect(photoUrl("https://stockandlist.com/", "u/1/a.jpg", "card")).toBe(
+      "https://stockandlist.com/cdn-cgi/image/width=480,fit=scale-down,format=auto,quality=80/images/u/1/a.jpg",
+    );
+  });
+  it("serves the stored photo where transformations aren't on", () => {
+    expect(photoUrl("http://localhost:5173", "u/1/a.jpg", "thumb")).toBe("http://localhost:5173/images/u/1/a.jpg");
+    expect(photoUrl("https://jewel-finder.tayfun-sen.workers.dev", "u/1/a.jpg", "full")).toBe(
+      "https://jewel-finder.tayfun-sen.workers.dev/images/u/1/a.jpg",
+    );
   });
 });

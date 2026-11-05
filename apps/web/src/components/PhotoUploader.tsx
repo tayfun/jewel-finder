@@ -1,6 +1,7 @@
 import { optimizePhoto } from "@jf/shared";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { Photo } from "./Photo";
 
 /** `onChange` takes an updater because uploads finish asynchronously, after other edits. */
 export function PhotoUploader({
@@ -63,7 +64,7 @@ export function PhotoUploader({
       >
         {value.map((key, i) => (
           <figure key={key} className="photo">
-            <img src={`/images/${key}`} alt="" />
+            <Photo k={key} size="card" />
             {i === 0 && <span className="cover">Cover</span>}
             <div className="photo-actions">
               <button type="button" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move left">

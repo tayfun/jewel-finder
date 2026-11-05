@@ -6,6 +6,7 @@ import { delistViaExtension, useExtension, useItemChanges } from "../extension";
 import { useAccount } from "../auth";
 import { ListingBadges, StatusBadge } from "../components/Badges";
 import { useLoad } from "../hooks";
+import { Photo } from "../components/Photo";
 
 /** Review items that look like the same thing entered twice: merge them, or say they're different. */
 export function Duplicates() {
@@ -241,7 +242,7 @@ function DupItem({
   return (
     <div className="dup-item">
       <Link to={`/items/${item.id}`} className="thumb">
-        {item.images[0] ? <img src={`/images/${item.images[0]}`} alt="" loading="lazy" /> : <span>No photo</span>}
+        {item.images[0] ? <Photo k={item.images[0]} size="card" loading="lazy" /> : <span>No photo</span>}
       </Link>
       <div className="dup-body">
         <Link to={`/items/${item.id}`} className="item-title" title={item.title}>

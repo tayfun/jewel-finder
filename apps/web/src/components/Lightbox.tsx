@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Photo } from "./Photo";
 
 /** Full-screen photo viewer. ←/→ move between photos, Esc or a click on the backdrop closes it. */
 export function Lightbox({
@@ -66,7 +67,7 @@ export function Lightbox({
             ‹
           </button>
         )}
-        <img key={images[index]} src={`/images/${images[index]}`} alt={`Photo ${index + 1} of ${count}`} />
+        <Photo key={images[index]} k={images[index]!} size="full" alt={`Photo ${index + 1} of ${count}`} />
         {count > 1 && (
           <button className="lightbox-nav next" onClick={() => go(1)} aria-label="Next photo">
             ›
@@ -84,7 +85,7 @@ export function Lightbox({
               aria-label={`Photo ${i + 1}`}
               aria-current={i === index}
             >
-              <img src={`/images/${k}`} alt="" />
+              <Photo k={k} size="thumb" />
             </button>
           ))}
         </div>

@@ -7,6 +7,7 @@ import { useItemChanges } from "../extension";
 import { useDebounced, useLoad } from "../hooks";
 import { useState } from "react";
 import { Loader } from "../components/Loader";
+import { Photo } from "../components/Photo";
 
 export function Inventory() {
   const { settings } = useAccount();
@@ -147,7 +148,7 @@ export function Inventory() {
         {items.data?.map((item) => (
           <Link key={item.id} to={`/items/${item.id}`} className="item-card">
             <div className="thumb">
-              {item.images[0] ? <img src={`/images/${item.images[0]}`} alt="" loading="lazy" /> : <span>No photo</span>}
+              {item.images[0] ? <Photo k={item.images[0]} size="card" loading="lazy" /> : <span>No photo</span>}
             </div>
             <div className="item-card-body">
               <div className="item-title">{item.title}</div>

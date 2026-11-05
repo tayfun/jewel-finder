@@ -1,3 +1,5 @@
+import { imageUrl } from "./marketplaces";
+
 // Photos are made smaller before upload, in the browser (web app) or the extension's service worker:
 // R2 keeps one JPEG per photo, small enough to load quickly and accepted by every marketplace we list on.
 
@@ -66,4 +68,32 @@ export async function optimizePhoto(blob: Blob): Promise<Blob> {
   } finally {
     bitmap.close();
   }
+}
+
+// ------------------------------------------------------------------ serving
+
+/** Display sizes, in CSS pixels × 2 for high-density screens. */
+export const PHOTO_WIDTHS = {
+  /** Small thumbnails: photo strips, tables, the extension's side panel (40–70px). */
+  thumb: 160,
+  /** Grid cards and upload tiles (up to ~240px). */
+  card: 480,
+  /** The main photo on the item page (up to ~560px). */
+  large: 1200,
+  /** The lightbox: the stored size, just in a lighter format. */
+  full: PHOTO_MAX_EDGE,
+} as const;
+export type PhotoSize = keyof typeof PHOTO_WIDTHS;
+
+/** Hosts with Cloudflare Image Transformations turned on. Elsewhere (local dev, workers.dev) photos are served as stored. */
+const RESIZING_HOSTS = new Set(["stockandlist.com"]);
+
+/**
+ * URL for showing a photo at a size: resized by Cloudflare and sent as AVIF or WebP to browsers that take
+ * them (format=auto), cached at the edge. The stored JPEG is untouched; listing uploads use imageUrl.
+ */
+export function photoUrl(base: string, key: string, size: PhotoSize): string {
+  const origin = base.replace(/\/$/, "");
+  if (!RESIZING_HOSTS.has(new URL(origin).hostname)) return imageUrl(origin, key);
+  return `${origin}/cdn-cgi/image/width=${PHOTO_WIDTHS[size]},fit=scale-down,format=auto,quality=80/images/${key}`;
 }

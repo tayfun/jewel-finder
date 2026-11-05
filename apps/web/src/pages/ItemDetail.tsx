@@ -25,6 +25,7 @@ import { Lightbox } from "../components/Lightbox";
 import { delistViaExtension, listViaExtension, relistViaExtension, useExtension, useItemChanges } from "../extension";
 import { useLoad } from "../hooks";
 import { Loader } from "../components/Loader";
+import { Photo } from "../components/Photo";
 
 export function ItemDetail() {
   const { id } = useParams();
@@ -204,7 +205,7 @@ export function ItemDetail() {
                   aria-label="View photo full screen"
                   title="Click to view full screen"
                 >
-                  <img className="main-photo" src={`/images/${item.images[Math.min(photo, item.images.length - 1)]}`} alt="" />
+                  <Photo className="main-photo" k={item.images[Math.min(photo, item.images.length - 1)]!} size="large" />
                 </button>
                 {item.images.length > 1 && (
                   <>
@@ -232,7 +233,7 @@ export function ItemDetail() {
                 <div className="thumbs">
                   {item.images.map((k, i) => (
                     <button key={k} className={i === photo ? "active" : ""} onClick={() => setPhoto(i)}>
-                      <img src={`/images/${k}`} alt="" />
+                      <Photo k={k} size="thumb" />
                     </button>
                   ))}
                 </div>

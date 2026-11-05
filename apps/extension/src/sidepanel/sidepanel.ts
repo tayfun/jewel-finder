@@ -3,6 +3,7 @@ import {
   MARKETPLACE_LABELS,
   formatMoney,
   imageUrl,
+  photoUrl,
   isStale,
   listingAgeDays,
   type Account,
@@ -253,7 +254,19 @@ function renderItem(item: ItemWithListings) {
   return h(
     "li",
     { class: "item" },
-    cover ? h("img", { src: imageUrl(API_URL, cover), alt: "", loading: "lazy" }) : h("div", { class: "noimg" }),
+    cover
+      ? h("img", {
+          src: photoUrl(API_URL, cover, "thumb"),
+          alt: "",
+          loading: "lazy",
+          // The resized copy failed (e.g. over the transformation quota): show the stored photo.
+          onError: (e) => {
+            const img = e.currentTarget as HTMLImageElement;
+            const original = imageUrl(API_URL, cover);
+            if (img.src !== original) img.src = original;
+          },
+        })
+      : h("div", { class: "noimg" }),
     h(
       "div",
       {},
