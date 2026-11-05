@@ -1,22 +1,6 @@
+import { optimizePhoto } from "@jf/shared";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-
-const MAX_EDGE = 2000;
-
-/** Downscale big JPEG/PNG/WebP photos in the browser before upload. HEIC etc. go up as-is. */
-async function shrink(file: File): Promise<Blob> {
-  if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < 1_000_000) return file;
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-    if (scale === 1 && file.size < 4_000_000) return file;
-    const canvas = new OffscreenCanvas(Math.round(bitmap.width * scale), Math.round(bitmap.height * scale));
-    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    return await canvas.convertToBlob({ type: "image/jpeg", quality: 0.88 });
-  } catch {
-    return file;
-  }
-}
 
 /** `onChange` takes an updater because uploads finish asynchronously, after other edits. */
 export function PhotoUploader({
@@ -41,7 +25,8 @@ export function PhotoUploader({
     setUploading((n) => n + list.length);
     for (const file of list) {
       try {
-        const blob = await shrink(file);
+        // Downscaled and re-encoded here, so uploads are quick and R2 keeps a small JPEG.
+        const blob = await optimizePhoto(file);
         const res = await api<{ key: string }>("/api/images", { body: blob, contentType: blob.type });
         onChange((keys) => [...keys, res.key]);
       } catch (e) {

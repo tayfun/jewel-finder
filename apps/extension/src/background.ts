@@ -14,6 +14,7 @@ import {
   type Settings,
   imageUrl,
   myListingsUrl,
+  optimizePhoto,
   sellUrl,
   type Account,
   type AuthResponse,
@@ -109,8 +110,10 @@ async function copyPhoto(url: string): Promise<string> {
   const fromExt = ext ? `image/${ext === "jpg" ? "jpeg" : ext}` : "";
   const type = PHOTO_TYPES.includes(blob.type.split(";")[0]!.trim()) ? blob.type.split(";")[0]!.trim() : fromExt;
   if (!PHOTO_TYPES.includes(type) || blob.size === 0 || blob.size > MAX_PHOTO_BYTES) throw new Error(`Unsupported photo (${type || "unknown type"})`);
+  // Same as the web app's uploads: at most 1600px, as JPEG unless the original is already smaller.
+  const photo = await optimizePhoto(new Blob([blob], { type }));
   // Repeating the upload is harmless (at worst an unused copy), so it may retry on a slow connection.
-  const { key } = await api<{ key: string }>("/api/images", { body: new Blob([blob], { type }), retry: true });
+  const { key } = await api<{ key: string }>("/api/images", { body: photo, retry: true });
   return key;
 }
 
