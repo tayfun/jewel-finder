@@ -6,6 +6,15 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	// Production lives at stockandlist.com (a Custom Domain: wrangler creates the DNS record and certificate).
+	"routes": [
+		{
+			"pattern": "stockandlist.com",
+			"custom_domain": true
+		}
+	],
+	// Kept on: extension builds up to 0.8.x call the API at jewel-finder.tayfun-sen.workers.dev.
+	"workers_dev": true,
 	// The built web app is served from the same Worker. /api and /images hit the Worker first.
 	"assets": {
 		"directory": "../web/dist",

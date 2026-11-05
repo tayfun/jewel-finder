@@ -10,14 +10,14 @@
 // Images are drawn with satori (layout + text as shapes, using Inter) and resvg (to PNG), so they look
 // the same whichever machine builds them.
 //
-//   SITE_URL=https://stockandlist.com pnpm --filter @jf/web build   # once the domain points here
+//   SITE_URL=https://staging.example pnpm --filter @jf/web build   # for a deployment elsewhere
 import { Resvg } from "@resvg/resvg-js";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import satori from "satori";
 
-const SITE = (process.env.SITE_URL || "https://jewel-finder.tayfun-sen.workers.dev").replace(/\/$/, "");
+const SITE = (process.env.SITE_URL || "https://stockandlist.com").replace(/\/$/, "");
 const web = resolve(import.meta.dirname, "..");
 const dist = resolve(web, "dist");
 const require = createRequire(import.meta.url);

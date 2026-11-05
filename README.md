@@ -241,8 +241,9 @@ and photos are not sent. 4xx responses and the 503 "not configured" response are
 ## Deploy
 
 The project was called Jewel Finder; the Cloudflare names stay as they were, because renaming them would
-start an empty Worker at a new address: the Worker is still `jewel-finder` (served at
-`jewel-finder.tayfun-sen.workers.dev`) and the photos bucket `jewel-finder-images`. The brand lives in
+start an empty Worker at a new address: the Worker is still `jewel-finder` and the photos bucket
+`jewel-finder-images`. Production is served at **stockandlist.com**, a Custom Domain set in
+`apps/api/wrangler.jsonc`; `jewel-finder.tayfun-sen.workers.dev` stays on for extensions older than 0.9.0. The brand lives in
 `apps/web/public/favicon.svg` (mark) and `logo.svg` (wordmark); the extension's PNG icons are rendered from
 `apps/extension/icons/logo.svg`.
 

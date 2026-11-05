@@ -10,7 +10,7 @@ import * as esbuild from "esbuild";
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 const watch = process.argv.includes("--watch");
-const PROD_API_URL = "https://jewel-finder.tayfun-sen.workers.dev";
+const PROD_API_URL = "https://stockandlist.com";
 const API_URL = (process.env.API_URL ?? (process.argv.includes("--prod") ? PROD_API_URL : "http://localhost:8787")).replace(/\/$/, "");
 const apiOrigin = new URL(API_URL);
 const dev = ["localhost", "127.0.0.1"].includes(apiOrigin.hostname);
