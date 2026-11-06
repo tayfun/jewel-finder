@@ -423,7 +423,8 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
     onChange();
   }
 
-  // Why "List on …" can't be used right now, shown under the button.
+  // Why "List on …" can't be used right now, shown under the button. Without the extension (e.g. on a
+  // phone) listing goes through the copy-and-paste hand-off instead, so that isn't a reason.
   const blocked =
     item.status === "sold"
       ? "Item is marked as sold"
@@ -431,17 +432,16 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
         ? "Add a photo first"
         : extension === null
           ? "Checking for the extension…"
-          : extension === false
-            ? "Extension not detected"
-            : null;
+          : null;
+  const byHand = (m: Marketplace) => `/items/${item.id}/list/${m}`;
 
   return (
     <section className="card">
       <h2>Marketplaces</h2>
       {extension === false && (
         <p className="notice small">
-          <Link to="/extension">Install the Stock & List Chrome extension</Link> to fill in and end Vinted and eBay
-          listings for you.
+          “List on …” walks you through copying the details into the Vinted or eBay app. On a computer, the{" "}
+          <Link to="/extension">Chrome extension</Link> fills in and ends listings for you.
         </p>
       )}
       <ul className="listings">
@@ -530,15 +530,25 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
                     </button>
                   </>
                 )}
-                {canList && (
-                  <button
-                    className="primary"
-                    disabled={!!busy || !!blocked}
-                    title={blocked ?? `Open ${MARKETPLACE_LABELS[m]} and fill in this item`}
-                    onClick={() => list(m)}
-                  >
-                    {busy === m ? "Opening…" : l?.status === "pending" ? "Try again" : `List on ${MARKETPLACE_LABELS[m]}`}
-                  </button>
+                {canList &&
+                  (extension === false && !blocked ? (
+                    <Link className="button primary" to={byHand(m)} title={`Copy this item's details into ${MARKETPLACE_LABELS[m]}`}>
+                      List on {MARKETPLACE_LABELS[m]}
+                    </Link>
+                  ) : (
+                    <button
+                      className="primary"
+                      disabled={!!busy || !!blocked}
+                      title={blocked ?? `Open ${MARKETPLACE_LABELS[m]} and fill in this item`}
+                      onClick={() => list(m)}
+                    >
+                      {busy === m ? "Opening…" : l?.status === "pending" ? "Try again" : `List on ${MARKETPLACE_LABELS[m]}`}
+                    </button>
+                  ))}
+                {canList && extension && !blocked && (
+                  <Link className="small hand-link" to={byHand(m)} title="Copy the details and list it yourself, e.g. in the app">
+                    List by hand
+                  </Link>
                 )}
                 {l?.status !== "listed" && l?.status !== "sold" && l?.status !== "ending" && (
                   <button onClick={() => setManual(manual === m ? null : m)}>Already listed?</button>

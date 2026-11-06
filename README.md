@@ -68,6 +68,23 @@ an item it writes that item's id to `itemsChanged` in `chrome.storage.local`, an
 passes it on to the page as `ITEMS_CHANGED`. Pages refetch only the changed items (batched, for imports) and
 swap them into the list in place (`mergeChangedItems`); Inventory also refreshes its counts.
 
+### Listing from a phone
+
+Phones can't run the extension, so there "List on Vinted/eBay" opens a hand-off page instead
+(`/items/:id/list/:marketplace`; also "List by hand" next to the extension's button on a computer):
+
+1. **Save the photos:** one tap opens the phone's share sheet with all of them ("Save images" puts them in
+   the camera roll). Where the browser can't share files, each photo gets a download link.
+2. **Copy the details:** title, description, price, category, brand, size, condition, colour, parcel size
+   and book details, each with its own Copy button, worded the way that marketplace's form does
+   (`handListingFields` in `packages/shared/src/marketplaces.ts`; eBay titles are cut to 80 characters).
+3. **Open Vinted/eBay:** the sell link, which the marketplace's app opens if it's installed.
+4. **Link it back:** paste the new listing's link (Share → Copy link in the app) to mark it listed, so
+   cross-delisting and relisting keep working.
+
+There's no way to pre-fill either app's sell form from a link, so this is as far as a phone can go
+without eBay's API.
+
 ### Cross-delisting
 
 Mark an item sold ("Sold on Vinted/eBay/elsewhere") → its other live listings become "Needs ending" and

@@ -265,3 +265,49 @@ export function isStale(
   const age = listingAgeDays(listing, now);
   return age != null && age >= relistAfterDays(listing.marketplace, settings);
 }
+
+/** One value to copy into a marketplace's sell form by hand (phone hand-off, no extension). */
+export interface HandField {
+  label: string;
+  value: string;
+  /** Long text, shown as a block. */
+  long?: boolean;
+  /** A caution about this value, e.g. it was shortened. */
+  note?: string;
+}
+
+/**
+ * What to copy into Vinted's or eBay's own sell form, worded the way that marketplace's form does
+ * (its condition names, its parcel sizes). Empty values are left out.
+ */
+export function handListingFields(
+  item: Pick<Item, "title" | "description" | "price" | "brand" | "category" | "size" | "colour" | "condition" | "book" | "packageSize" | "weightGrams">,
+  marketplace: Marketplace,
+): HandField[] {
+  const ebay = marketplace === "ebay";
+  const title = ebay ? item.title.slice(0, 80) : item.title;
+  const parcel = ebay ? ebayPackageSize(item) : vintedPackageSize(item);
+  const book = item.book;
+  const fields: HandField[] = [
+    { label: "Title", value: title, note: ebay && item.title.length > 80 ? "Shortened to eBay's 80 characters." : undefined },
+    { label: "Description", value: item.description, long: true },
+    { label: "Price", value: item.price == null ? "" : (item.price / 100).toFixed(2) },
+    { label: "Category", value: item.category },
+    { label: "Brand", value: item.brand },
+    { label: "Size", value: item.size },
+    { label: "Condition", value: item.condition ? (ebay ? EBAY_CONDITION_LABELS : CONDITION_LABELS)[item.condition] : "" },
+    { label: "Colour", value: item.colour },
+    {
+      label: ebay ? "Package size" : "Parcel size",
+      value: parcel ? (ebay ? PACKAGE_SIZE_LABELS[parcel as PackageSize] : VINTED_PACKAGE_LABELS[parcel as VintedPackageSize]) : "",
+      note: parcel && item.weightGrams ? `Packed weight ${item.weightGrams} g.` : undefined,
+    },
+    { label: "Author", value: book?.author ?? "" },
+    { label: "ISBN", value: book?.isbn ?? "" },
+    { label: "Publisher", value: book?.publisher ?? "" },
+    { label: "Year", value: book?.yearPublished ? String(book.yearPublished) : "" },
+    { label: "Format", value: book?.format ? BOOK_FORMAT_LABELS[book.format] : "" },
+    { label: "Edition", value: [book?.edition, book?.printing].filter(Boolean).join(", ") },
+  ];
+  return fields.filter((f) => f.value.trim());
+}

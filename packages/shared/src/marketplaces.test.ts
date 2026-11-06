@@ -5,6 +5,7 @@ import {
   vintedCategory,
   conditionFromText,
   ebayPackageSize,
+  handListingFields,
   isStale,
   isValidIsbn,
   listingAgeDays,
@@ -235,5 +236,48 @@ describe("bookLanguage", () => {
     expect(lang("Margaret Atwood The Handmaid's Tale PB Vintage 1996 English Dystopia").language).toBe("English");
     expect(lang("Le Petit Prince", "", ["french"]).language).toBe("French");
     expect(lang("Roald Dahl The Witches PB Puffin")).toEqual({ language: "English", guess: "none saved, so the default" });
+  });
+});
+
+describe("hand listing fields", () => {
+  const base = {
+    title: "Levi's 501 straight jeans W32 L30",
+    description: "Classic fit.\nWorn twice.",
+    price: 2500,
+    brand: "Levi's",
+    category: "Men › Jeans",
+    size: "W32",
+    colour: "",
+    condition: "very_good" as const,
+    book: null,
+    packageSize: "small" as const,
+    weightGrams: 2600,
+  };
+  const pairs = (fields: ReturnType<typeof handListingFields>) => fields.map((f) => [f.label, f.value]);
+
+  it("words each marketplace's form its own way and leaves out empty values", () => {
+    expect(pairs(handListingFields(base, "vinted"))).toEqual([
+      ["Title", base.title],
+      ["Description", base.description],
+      ["Price", "25.00"],
+      ["Category", "Men › Jeans"],
+      ["Brand", "Levi's"],
+      ["Size", "W32"],
+      ["Condition", "Very good"],
+      // 2.6 kg is over Vinted's 2 kg Small.
+      ["Parcel size", "Medium"],
+    ]);
+    const ebay = handListingFields(base, "ebay");
+    expect(ebay.find((f) => f.label === "Condition")?.value).toBe("Pre-owned - Excellent");
+    // eBay's Small parcel goes up to 2 kg too, so it's bumped to Medium parcel.
+    expect(ebay.find((f) => f.label === "Package size")).toMatchObject({ value: "Medium parcel", note: "Packed weight 2600 g." });
+  });
+
+  it("shortens eBay titles and adds book details", () => {
+    const long = { ...base, title: "x".repeat(90), book: BookDetails.parse({ author: "Tolkien", isbn: "9780261102217", edition: "First edition", printing: "First impression", format: "hardback" }) };
+    const ebay = handListingFields(long, "ebay");
+    expect(ebay[0]).toMatchObject({ value: "x".repeat(80), note: "Shortened to eBay's 80 characters." });
+    expect(handListingFields(long, "vinted")[0]!.value).toHaveLength(90);
+    expect(pairs(ebay).slice(-4)).toEqual([["Author", "Tolkien"], ["ISBN", "9780261102217"], ["Format", "Hardback"], ["Edition", "First edition, First impression"]]);
   });
 });

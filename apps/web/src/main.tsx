@@ -12,6 +12,7 @@ import { EditItem, NewItem } from "./pages/ItemEditor";
 import { Extension } from "./pages/Extension";
 import { Duplicates } from "./pages/Duplicates";
 import { Import } from "./pages/Import";
+import { ListByHand } from "./pages/ListByHand";
 import { Relist } from "./pages/Relist";
 import { Privacy } from "./pages/Privacy";
 import { About } from "./pages/About";
@@ -38,6 +39,7 @@ const router = createRouter([
       { path: "/items/new", element: <NewItem /> },
       { path: "/items/:id", element: <ItemDetail /> },
       { path: "/items/:id/edit", element: <EditItem /> },
+      { path: "/items/:id/list/:marketplace", element: <ListByHand /> },
       { path: "/settings", element: <Settings /> },
       { path: "/extension", element: <Extension /> },
       { path: "/import", element: <Import /> },

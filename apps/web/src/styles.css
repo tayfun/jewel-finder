@@ -1134,3 +1134,23 @@ label.ai-filled input, label.ai-filled select, label.ai-filled textarea { border
   .ext-prompt { grid-template-columns: auto minmax(0, 1fr); }
   .ext-prompt .button { grid-column: 1 / -1; }
 }
+
+/* ==========================================================================
+   Listing by hand (phone hand-off)
+   ========================================================================== */
+.hand-list { max-width: 720px; }
+.hand-step h2 { display: flex; align-items: center; gap: 0.55rem; }
+.step-no { display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; flex: none; border-radius: 50%; background: var(--accent); color: #fff; font-size: 0.85rem; font-weight: 700; }
+.hand-photos { display: flex; gap: 0.4rem; overflow-x: auto; margin-bottom: 0.8rem; padding: 2px; }
+.hand-photos img { width: 64px; height: 64px; flex: none; object-fit: cover; border-radius: 9px; border: 1px solid var(--border); }
+.hand-downloads { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.hand-fields { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.1rem; }
+.hand-fields li { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+.hand-fields li:last-child { border-bottom: none; }
+.hand-fields li.long { align-items: flex-start; }
+.hand-field-text { display: flex; flex-direction: column; gap: 0.1rem; flex: 1; min-width: 0; }
+.hand-value { font-weight: 600; overflow-wrap: anywhere; }
+.hand-long { max-height: 9.5rem; overflow-y: auto; font-size: 0.92rem; }
+.hand-fields button { flex: none; min-width: 5.5rem; }
+.hand-fields button.copied { border-color: var(--accent); color: var(--accent); }
+.hand-link { align-self: center; }
