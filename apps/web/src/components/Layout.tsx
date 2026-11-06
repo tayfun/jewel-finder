@@ -54,7 +54,7 @@ export function Layout({ children }: { children?: ReactNode }) {
           {account?.isAdmin && <NavLink to="/admin">Admin</NavLink>}
         </nav>
         <div className="topbar-end">
-          <span className="muted small hide-sm">{account?.email}</span>
+          <span className="muted small topbar-email">{account?.email}</span>
           <ThemeToggle />
           <button
             className="icon-button menu-button"

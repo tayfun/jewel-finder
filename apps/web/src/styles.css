@@ -526,7 +526,8 @@ label.checkbox input { width: 1rem; }
   .fan-art { transform: translateX(-14px) scale(0.75); transform-origin: center bottom; height: 150px; margin-bottom: 1.5rem; }
   .signup-pitch .brand { font-size: 1.8rem; }
   .signup-pitch .brand .logo-mark { width: 56px; height: 56px; }
-  .detail, .grid-2 { grid-template-columns: 1fr; }
+  /* minmax(0, …): a plain 1fr column can't shrink below its content, so a long thumbnail strip widened the page. */
+  .detail, .grid-2 { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 600px) {
   .container { padding: 1.1rem 1rem 2rem; }
@@ -548,8 +549,11 @@ label.checkbox input { width: 1rem; }
   .autofill-table td.prewrap:last-child { grid-column: 2; }
 }
 .menu-button { display: none; }
-/* Phones and small tablets: the links fold into a menu under a ☰ button, so nothing scrolls sideways. */
-@media (max-width: 760px) {
+/* The signed-in email crowds the links on narrower screens. */
+@media (max-width: 1100px) { .topbar-email { display: none; } }
+/* Phones and tablets: the links fold into a menu under a ☰ button, so nothing scrolls sideways.
+   The full row (links, Admin, theme) needs about 860px. */
+@media (max-width: 900px) {
   .topbar-end { margin-left: auto; }
   .menu-button { display: inline-grid; place-items: center; font-size: 1.15rem; }
   .topbar nav {
