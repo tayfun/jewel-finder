@@ -113,6 +113,7 @@ export function NewItem() {
           initial={item ?? { images }}
           submitLabel="Next: price →"
           hidePrice
+          compactPhotos
           // Once saved, the form starts from the item: don't fill it in again.
           ai={ai && !item ? { ...ai, retry: () => void autofill() } : undefined}
           onSubmit={saveDetails}

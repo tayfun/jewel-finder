@@ -25,6 +25,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { EMPTY_BOOK, bookOrNull } from "../book";
 import { STATUS_LABELS } from "./Badges";
 import { Loader } from "./Loader";
+import { Photo } from "./Photo";
 import { PhotoUploader } from "./PhotoUploader";
 
 interface FormState {
@@ -189,6 +190,7 @@ export function ItemForm({
   onSubmit,
   ai,
   hidePrice,
+  compactPhotos,
 }: {
   initial?: Partial<Item>;
   submitLabel: string;
@@ -197,6 +199,11 @@ export function ItemForm({
   onSubmit(input: ItemInput): Promise<void>;
   /** Auto-fill from photos for a new item: the form fills in once the suggestion arrives. */
   ai?: AutofillState;
+  /**
+   * Photos as a small strip that unfolds to the full uploader: in the add-item wizard they were just
+   * arranged in step 1, and the details are what the seller is checking here.
+   */
+  compactPhotos?: boolean;
 }) {
   const [form, setForm] = useState(() => toForm(initial));
   const [error, setError] = useState<string | null>(null);
@@ -204,6 +211,9 @@ export function ItemForm({
   // Fields the AI filled, marked until the seller edits them.
   const [aiFilled, setAiFilled] = useState<Set<string>>(new Set());
   // Book fields show for books: saved book details, or the AI saying it's a book. Shown by default otherwise.
+  // Compact photos start unfolded only when there's nothing to show (photos were skipped); after that the
+  // seller decides, so adding the first photo doesn't fold it away.
+  const [photosOpen, setPhotosOpen] = useState(() => !initial?.images?.length);
   const [showBook, setShowBook] = useState(() => (initial?.id ? Boolean(initial.book) : true));
 
   const suggestion = ai?.suggestion;
@@ -263,10 +273,35 @@ export function ItemForm({
 
   return (
     <form className="item-form" onSubmit={submit}>
-      <section className="card">
-        <h2>Photos</h2>
-        <PhotoUploader value={form.images} onChange={(u) => setForm((f) => ({ ...f, images: u(f.images) }))} />
-      </section>
+      {compactPhotos ? (
+        <details className="card photos-compact" open={photosOpen} onToggle={(e) => setPhotosOpen(e.currentTarget.open)}>
+          <summary>
+            {form.images[0] ? <Photo k={form.images[0]} size="thumb" className="cover-thumb" alt="Cover photo" /> : null}
+            <span className="photos-compact-text">
+              <strong>Photos</strong>
+              <span className="muted small">
+                {form.images.length ? `${form.images.length} added · tap to edit` : "None yet: add some"}
+              </span>
+            </span>
+            {form.images.length > 1 && (
+              <span className="photos-compact-rest" aria-hidden="true">
+                {form.images.slice(1, 7).map((k) => (
+                  <Photo key={k} k={k} size="thumb" alt="" />
+                ))}
+                {form.images.length > 7 && <span className="more">+{form.images.length - 7}</span>}
+                {/* Phones: just the count of the rest. */}
+                <span className="more more-sm">+{form.images.length - 1}</span>
+              </span>
+            )}
+          </summary>
+          <PhotoUploader value={form.images} onChange={(u) => setForm((f) => ({ ...f, images: u(f.images) }))} />
+        </details>
+      ) : (
+        <section className="card">
+          <h2>Photos</h2>
+          <PhotoUploader value={form.images} onChange={(u) => setForm((f) => ({ ...f, images: u(f.images) }))} />
+        </section>
+      )}
 
       {ai?.status === "loading" && (
         <section className="card ai-status loading" aria-live="polite">

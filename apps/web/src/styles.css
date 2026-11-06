@@ -408,6 +408,23 @@ label small { font-weight: 400; }
 .photo.add { flex-direction: column; border: 1.5px dashed var(--border-strong); background: none; color: var(--muted); font-size: 0.85rem; gap: 0.15rem; box-shadow: none; height: auto; }
 .photo.add:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .photo.add span { font-size: 1.7rem; line-height: 1; font-weight: 300; }
+/* Add-item details step: the photos folded into one line (cover, a few thumbnails, count). */
+.photos-compact { padding: 0.7rem 0.9rem; }
+.photos-compact summary { display: flex; align-items: center; gap: 0.75rem; cursor: pointer; list-style: none; }
+.photos-compact summary::-webkit-details-marker { display: none; }
+.photos-compact summary::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform 0.15s; }
+.photos-compact[open] summary::after { transform: rotate(180deg); }
+.photos-compact[open] summary { margin-bottom: 0.8rem; }
+.photos-compact .cover-thumb { width: 64px; height: 64px; flex: none; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); }
+.photos-compact-text { display: flex; flex-direction: column; min-width: 0; }
+.photos-compact-rest { display: flex; gap: 0.3rem; align-items: center; min-width: 0; overflow: hidden; }
+.photos-compact-rest img, .photos-compact-rest .more { width: 34px; height: 34px; flex: none; object-fit: cover; border-radius: 7px; border: 1px solid var(--border); }
+.photos-compact-rest .more { display: grid; place-items: center; font-size: 0.72rem; font-weight: 650; color: var(--muted); background: var(--surface-2); }
+.photos-compact-rest .more-sm { display: none; }
+@media (max-width: 600px) {
+  .photos-compact-rest img, .photos-compact-rest .more { display: none; }
+  .photos-compact-rest .more.more-sm { display: grid; }
+}
 .form-hint { margin: -0.6rem 0 0.9rem; }
 label.checkbox { flex-direction: row; align-items: center; gap: 0.5rem; align-self: end; padding-bottom: 0.6rem; }
 label.checkbox input { width: 1rem; }
