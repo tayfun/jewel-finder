@@ -561,3 +561,14 @@ describe("admin", () => {
     expect((await call("/api/admin/sync", { token: seller.token, json: { ids: [] } })).status).toBe(403);
   });
 });
+
+describe("resolving listing links", () => {
+  it("needs sign-in, accepts full listing links and rejects anything else", async () => {
+    expect((await call("/api/resolve-link", { json: { url: "https://ebay.io/m/x" } })).status).toBe(401);
+    const { token } = await signUp();
+    const ok = await call<{ marketplace: string; externalId: string }>("/api/resolve-link", { token, json: { url: "https://www.ebay.co.uk/itm/820325294563?mkcid=16" } });
+    expect(ok.data).toMatchObject({ marketplace: "ebay", externalId: "820325294563", url: "https://www.ebay.co.uk/itm/820325294563" });
+    expect((await call("/api/resolve-link", { token, json: { url: "https://example.com/m/x" } })).status).toBe(422);
+    expect((await call("/api/resolve-link", { token, json: { url: "not a url" } })).status).toBe(400);
+  });
+});

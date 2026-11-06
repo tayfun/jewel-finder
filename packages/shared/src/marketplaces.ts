@@ -311,3 +311,21 @@ export function handListingFields(
   ];
   return fields.filter((f) => f.value.trim());
 }
+
+/** Short links marketplace apps' Share buttons hand out; they redirect to the listing (resolved by the API). */
+export const SHORT_LINK_HOSTS = ["ebay.io", "ebay.us"] as const;
+
+export function isShortListingLink(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && (SHORT_LINK_HOSTS as readonly string[]).includes(u.hostname.replace(/^www\./, ""));
+  } catch {
+    return false;
+  }
+}
+
+/** The first web address in pasted text: apps' Share often gives "Check out this item on eBay! https://…". */
+export function extractUrl(text: string): string | null {
+  const m = text.match(/https?:\/\/[^\s<>"']+/i);
+  return m ? m[0].replace(/[).,!?;:'"]+$/, "") : null;
+}

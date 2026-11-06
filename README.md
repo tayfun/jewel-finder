@@ -80,7 +80,9 @@ Phones can't run the extension, so there "List on Vinted/eBay" opens a hand-off 
    (`handListingFields` in `packages/shared/src/marketplaces.ts`; eBay titles are cut to 80 characters).
 3. **Open Vinted/eBay:** the sell link, which the marketplace's app opens if it's installed.
 4. **Link it back:** paste the new listing's link (Share → Copy link in the app) to mark it listed, so
-   cross-delisting and relisting keep working.
+   cross-delisting and relisting keep working. The eBay app shares short links (`ebay.io/m/…`, `ebay.us/…`);
+   `POST /api/resolve-link` follows them to the listing (only those hosts, only hops within eBay/Vinted).
+   Whole share messages work too: the first link in the text is used.
 
 There's no way to pre-fill either app's sell form from a link, so this is as far as a phone can go
 without eBay's API.

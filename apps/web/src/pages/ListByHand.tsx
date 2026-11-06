@@ -3,7 +3,6 @@ import {
   MARKETPLACE_LABELS,
   handListingFields,
   imageUrl,
-  parseListingUrl,
   sellUrl,
   type ItemWithListings,
   type Marketplace,
@@ -15,6 +14,7 @@ import { useAccount } from "../auth";
 import { Loader } from "../components/Loader";
 import { Photo } from "../components/Photo";
 import { useLoad } from "../hooks";
+import { toListingLink } from "../listingLinks";
 
 /** Copies text, falling back to a hidden textarea where the Clipboard API isn't available. */
 async function copyText(text: string): Promise<void> {
@@ -51,6 +51,7 @@ export function ListByHand() {
   const [url, setUrl] = useState("");
   const [linkError, setLinkError] = useState("");
   const [linked, setLinked] = useState(false);
+  const [linking, setLinking] = useState(false);
 
   // Fetch the photos up front: phones only open the share sheet straight after a tap, with no waiting.
   useEffect(() => {
@@ -117,14 +118,17 @@ export function ListByHand() {
 
   async function saveLink() {
     setLinkError("");
-    const parsed = parseListingUrl(m!, url.trim());
-    if (!parsed) return setLinkError(`That doesn't look like a ${site} listing link. It should look like ${m === "vinted" ? "vinted.co.uk/items/123…" : "ebay.co.uk/itm/123…"}`);
+    setLinking(true);
     try {
+      // Takes full links, the apps' short share links (e.g. ebay.io/m/…) and whole share messages.
+      const parsed = await toListingLink(m!, url);
       await api(`/api/items/${item!.id}/listings/${m}`, { method: "PUT", json: { status: "listed", url: parsed.url, externalId: parsed.externalId, error: null } });
       setData(await api<ItemWithListings>(`/api/items/${item!.id}`));
       setLinked(true);
     } catch (e) {
       setLinkError((e as Error).message);
+    } finally {
+      setLinking(false);
     }
   }
 
@@ -239,7 +243,7 @@ export function ListByHand() {
             <div className="inline-form">
               <input
                 inputMode="url"
-                placeholder={m === "vinted" ? "https://www.vinted.co.uk/items/…" : "https://www.ebay.co.uk/itm/…"}
+                placeholder={m === "vinted" ? "https://www.vinted.co.uk/items/…" : "https://ebay.io/m/… or https://www.ebay.co.uk/itm/…"}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
               />
@@ -251,8 +255,8 @@ export function ListByHand() {
             </div>
             {linkError && <p className="error small">{linkError}</p>}
             <div className="actions">
-              <button className="primary" disabled={!url.trim()} onClick={() => void saveLink()}>
-                Mark as listed
+              <button className="primary" disabled={!url.trim() || linking} onClick={() => void saveLink()}>
+                {linking ? "Checking the link…" : "Mark as listed"}
               </button>
             </div>
           </>

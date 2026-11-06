@@ -6,6 +6,8 @@ import {
   conditionFromText,
   ebayPackageSize,
   handListingFields,
+  isShortListingLink,
+  extractUrl,
   isStale,
   isValidIsbn,
   listingAgeDays,
@@ -279,5 +281,21 @@ describe("hand listing fields", () => {
     expect(ebay[0]).toMatchObject({ value: "x".repeat(80), note: "Shortened to eBay's 80 characters." });
     expect(handListingFields(long, "vinted")[0]!.value).toHaveLength(90);
     expect(pairs(ebay).slice(-4)).toEqual([["Author", "Tolkien"], ["ISBN", "9780261102217"], ["Format", "Hardback"], ["Edition", "First edition, First impression"]]);
+  });
+});
+
+describe("pasted listing links", () => {
+  it("finds the link in an app's share text", () => {
+    expect(extractUrl("Check out this item on eBay! https://ebay.io/m/KSqSFz")).toBe("https://ebay.io/m/KSqSFz");
+    expect(extractUrl("https://www.vinted.co.uk/items/4821337-levis?referrer=share.")).toBe("https://www.vinted.co.uk/items/4821337-levis?referrer=share");
+    expect(extractUrl("no link here")).toBeNull();
+  });
+
+  it("recognises eBay's short links, and only over https", () => {
+    expect(isShortListingLink("https://ebay.io/m/KSqSFz")).toBe(true);
+    expect(isShortListingLink("https://ebay.us/abc123")).toBe(true);
+    expect(isShortListingLink("http://ebay.io/m/KSqSFz")).toBe(false);
+    expect(isShortListingLink("https://ebay.io.evil.example/m/x")).toBe(false);
+    expect(isShortListingLink("https://www.ebay.co.uk/itm/820325294563")).toBe(false);
   });
 });

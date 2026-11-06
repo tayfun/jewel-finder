@@ -7,7 +7,6 @@ import {
   formatMoney,
   isStale,
   listingAgeDays,
-  parseListingUrl,
   type DuplicatePair,
   type ItemWithListings,
   type Listing,
@@ -23,6 +22,7 @@ import { Pricing } from "../components/Pricing";
 import { StatusBadge } from "../components/Badges";
 import { Lightbox } from "../components/Lightbox";
 import { delistViaExtension, listViaExtension, relistViaExtension, useExtension, useItemChanges } from "../extension";
+import { toListingLink } from "../listingLinks";
 import { useLoad, useSwipe } from "../hooks";
 import { Loader } from "../components/Loader";
 import { Photo } from "../components/Photo";
@@ -369,9 +369,9 @@ function Listings({ item, onChange }: { item: ItemWithListings; onChange(): void
 
   async function saveManual(m: Marketplace) {
     setError(null);
-    const parsed = url ? parseListingUrl(m, url) : null;
-    if (url && !parsed) return setError(`That doesn't look like a ${MARKETPLACE_LABELS[m]} listing URL`);
     try {
+      // Optional: full links, the apps' short share links (e.g. ebay.io/m/…) or share messages.
+      const parsed = url.trim() ? await toListingLink(m, url) : null;
       await api(`/api/items/${item.id}/listings/${m}`, {
         method: "PUT",
         json: { status: "listed", url: parsed?.url ?? null, externalId: parsed?.externalId ?? null },

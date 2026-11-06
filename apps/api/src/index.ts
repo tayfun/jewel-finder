@@ -32,6 +32,7 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { AiError, reviewComps, suggestListing, type ImageInput } from "./ai";
 import { hashPassword, issueToken, readToken, verifyPassword } from "./auth";
+import { LinkUnreachable, resolveListingLink } from "./links";
 import { sentryOptions } from "./sentry";
 
 export { AccountDO } from "./account-do";
@@ -319,6 +320,23 @@ app.post("/api/items/:id/merge", async (c) => {
   if (!result.ok) throw new HTTPException(result.status, { message: result.error });
   if (result.removedImages.length) c.executionCtx.waitUntil(c.env.IMAGES.delete(result.removedImages));
   return c.json(result.item);
+});
+
+// --------------------------------------------------------------- links
+
+// The listing behind a marketplace app's short share link (e.g. https://ebay.io/m/…), which the
+// browser can't follow itself (it may not read another site's redirect).
+app.post("/api/resolve-link", async (c) => {
+  const { url } = parse(z.object({ url: z.url().max(500) }), await body(c));
+  let found;
+  try {
+    found = await resolveListingLink(url);
+  } catch (e) {
+    if (e instanceof LinkUnreachable) throw new HTTPException(502, { message: e.message });
+    throw e;
+  }
+  if (!found) throw new HTTPException(422, { message: "Couldn't find a listing behind that link. Open it and copy the address from the listing page instead." });
+  return c.json(found);
 });
 
 // ----------------------------------------------------------- price checks
